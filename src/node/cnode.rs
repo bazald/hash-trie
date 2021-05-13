@@ -1,9 +1,9 @@
-use crate::bit_indexed_array::*;
-use super::{flag::*, lnode::{self, *}, mnode::*, snode::{self, *}, traits::*};
+use crate::{bit_indexed_array::*, flag::*, result::*, traits::*};
+use super::{lnode::{self, *}, mnode::*, snode::{self, *}};
 use alloc::{boxed::Box, borrow::Cow, fmt::Debug, sync::Arc};
 
 #[derive(Debug)]
-pub(super) struct CNode <B: Bits, V: Value, H: 'static> {
+pub(crate) struct CNode <B: Bits, V: Value, H: 'static> {
     nodes: Arc<dyn BitIndexedArray::<B, MNode<B, V, H>, usize>>,
 }
 
@@ -51,7 +51,12 @@ impl<B: Bits, V: Value, H: 'static> CNode<B, V, H> {
                     RemoveResult::RemovedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::S(node)), Cow::Owned(self.size() - 1)).unwrap()), reference)
                 },
                 RemoveResult::RemovedZ(reference) => {
-                    RemoveResult::RemovedC(Self::new(self.nodes.removed(flag.unwrap().flag, Cow::Owned(self.size() - 1)).unwrap()), reference)
+                    if self.size() == 1 {
+                        RemoveResult::RemovedZ(reference)
+                    }
+                    else {
+                        RemoveResult::RemovedC(Self::new(self.nodes.removed(flag.unwrap().flag, Cow::Owned(self.size() - 1)).unwrap()), reference)
+                    }
                 },
             },
             Err(_) => RemoveResult::NotFound

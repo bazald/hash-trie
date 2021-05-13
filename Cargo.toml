@@ -1,9 +1,13 @@
 [package]
 name = "hash-trie"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Mitchell Keith Bloch <bazald@gmail.com>"]
-description = "Hash Array Mapped Trie (HAMT) and Ctrie implementations (in progress)"
+description = "Hash Array Mapped Trie (HAMT) Immutable Set Implementation"
 readme = "README.md"
 edition = "2018"
 repository = "https://github.com/bazald/hash-trie/"
 license = "MPL-2.0"
+keywords = ["memory", "concurrency", "performance", "immutable", "generic"]
+
+[dev-dependencies]
+rand = "0.8.3"

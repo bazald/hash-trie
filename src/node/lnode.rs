@@ -1,4 +1,5 @@
-use super::{cnode::*, flag::*, mnode::*, snode::*, traits::*};
+use crate::{flag::*, result::*, traits::*};
+use super::{cnode::*, snode::*};
 use alloc::{borrow::Cow, fmt::Debug, sync::*};
 
 #[derive(Clone, Debug)]
@@ -8,19 +9,12 @@ pub(super) enum LNodeNext<V: Value> {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct LNode<V: Value> {
+pub(crate) struct LNode<V: Value> {
     value: V,
     next: LNodeNext<V>,
     size: usize,
 }
 
-pub(super) enum LNodeRemoveResult<'a, V: Value> {
-    NotFound,
-    RemovedL(Arc<LNode<V>>, &'a V),
-    RemovedS(Arc<SNode<V>>, &'a V),
-}
-
-#[allow(dead_code)]
 impl<V: Value> LNode<V> {
     pub(super) fn new(value: V, next: LNodeNext<V>) -> Arc<Self> {
         let size = 1 + match &next {
@@ -32,18 +26,6 @@ impl<V: Value> LNode<V> {
             next,
             size,
         })
-    }
-
-    pub(super) fn get(&self) -> &V {
-        &self.value
-    }
-    
-    pub(super) fn next(&self) -> &LNodeNext<V> {
-        &self.next
-    }
-    
-    pub(super) fn size(&self) -> usize {
-        self.size
     }
 
     pub(super) fn find<'a>(&'a self, value: &V) -> FindResult<'a, V> {
@@ -98,29 +80,28 @@ pub(super) fn insert<'a, B: Bits, V: Value, H: HasherBv<B, V>>(this: &'a Arc<LNo
     }
 }
 
-#[allow(unused_macros)]
-macro_rules! lnode {
-    ( $value:expr, $snode:expr ) => {
-        {
-            LNode::new($value, LNodeNext::S(SNode::new($snode)))
-        }
-    };
-    ( $value:expr, $($rest:expr),+ ) => {
-        {
-            LNode::new($value, LNodeNext::L(lnode!($($rest),*)))
-        }
-    };
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::hash_map::DefaultHasher;
     
+    macro_rules! lnode {
+        ( $value:expr, $snode:expr ) => {
+            {
+                LNode::new($value, LNodeNext::S(SNode::new($snode)))
+            }
+        };
+        ( $value:expr, $($rest:expr),+ ) => {
+            {
+                LNode::new($value, LNodeNext::L(lnode!($($rest),*)))
+            }
+        };
+    }
+
     #[test]
     fn lnode_insert_3() {
         let node = lnode!(3, 2, 1);
-        assert_eq!(node.size(), 3);
+        assert_eq!(node.size, 3);
         assert_found_eq!(node.find(&1), 1);
         assert_found_eq!(node.find(&2), 2);
         assert_found_eq!(node.find(&3), 3);
@@ -143,7 +124,7 @@ mod tests {
             RemoveResult::NotFound => panic!(),
             RemoveResult::RemovedC(_cnode, _reference) => panic!(),
             RemoveResult::RemovedL(ln, _) => {
-                assert_eq!(ln.size(), 2);
+                assert_eq!(ln.size, 2);
                 assert_found_none!(ln.find(&1));
                 assert_found_eq!(ln.find(&2), 2);
                 assert_found_eq!(ln.find(&3), 3);
@@ -160,7 +141,7 @@ mod tests {
             RemoveResult::NotFound => panic!(),
             RemoveResult::RemovedC(_cnode, _reference) => panic!(),
             RemoveResult::RemovedL(ln, _) => {
-                assert_eq!(ln.size(), 2);
+                assert_eq!(ln.size, 2);
                 assert_found_eq!(ln.find(&1), 1);
                 assert_found_none!(ln.find(&2));
                 assert_found_eq!(ln.find(&3), 3);
@@ -177,7 +158,7 @@ mod tests {
             RemoveResult::NotFound => panic!(),
             RemoveResult::RemovedC(_cnode, _reference) => panic!(),
             RemoveResult::RemovedL(ln, _) => {
-                assert_eq!(ln.size(), 2);
+                assert_eq!(ln.size, 2);
                 assert_found_eq!(ln.find(&1), 1);
                 assert_found_eq!(ln.find(&2), 2);
                 assert_found_none!(ln.find(&3));

@@ -1,17 +1,12 @@
-use super::{cnode::*, flag::*, lnode::LNodeNext, mnode::*, traits::*};
+use crate::{flag::*, result::*, traits::*};
+use super::{cnode::*, lnode::LNodeNext};
 use alloc::{borrow::Cow, fmt::Debug, sync::Arc};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct SNode<V: Value> {
+pub(crate) struct SNode<V: Value> {
     value: V,
 }
 
-pub(super) enum SNodeRemoveResult<'a, V: Value> {
-    NotFound,
-    RemovedZ(&'a V),
-}
-
-#[allow(dead_code)]
 impl <V: Value> SNode<V> {
     pub(super) fn new(value: V) -> Arc<Self> {
         Arc::new(Self {value})
