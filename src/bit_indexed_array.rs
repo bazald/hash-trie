@@ -1,6 +1,6 @@
 use crate::traits::*;
-use alloc::{borrow::Cow, boxed::Box, collections::VecDeque, fmt::{Debug, Formatter}, vec::Vec};
-use core::{mem, ptr};
+use alloc::{borrow::Cow, boxed::Box, fmt::{Debug, Formatter}};
+use core::{cmp::Ordering, mem, ptr};
 
 struct BitIndexedArrayImpl <B, V, E, const SIZE: usize> {
     bits: B,
@@ -8,17 +8,17 @@ struct BitIndexedArrayImpl <B, V, E, const SIZE: usize> {
     extra: E,
 }
 
-impl<B: CountOnes, V, E, const SIZE: usize> BitIndexedArrayImpl<B, V, E, SIZE> {
-    fn new(bits: B, values: impl Into<VecDeque<V>>, extra: E) -> Result<Self, ()> {
-        let mut values: VecDeque<V> = values.into();
+impl<B: CountOnes, V: Clone, E: Clone, const SIZE: usize> BitIndexedArrayImpl<B, V, E, SIZE> {
+    fn new(bits: B, mut values: impl BitIndexedArrayValues<B, V, E>, extra: E) -> Result<Self, ()> {
         if bits.count_ones_t() != SIZE || values.len() != SIZE {
             return Err(());
         }
         let values = unsafe {
             #[allow(deprecated)]
             let mut building: [V; SIZE] = mem::uninitialized();
-            for dest in building.iter_mut() {
-                ptr::write(dest, values.pop_front().unwrap());
+            #[allow(clippy::needless_range_loop)]
+            for i in 0..SIZE {
+                ptr::write(&mut building[i], values.at_index(i))
             }
             building
         };
@@ -33,13 +33,14 @@ pub(crate) trait BitIndexedArray<B, V: Clone, E: Clone>: 'static {
     fn extra(&self) -> &E;
 
     fn at(&self, bit: B) -> Result<&V, BitError>;
+    fn at_bit_index(&self, index: usize) -> Result<&V, BitError>;
     fn at_index(&self, index: usize) -> Result<&V, BitError>;
     fn inserted(&self, bit: B, value: Cow<V>, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError>;
-    fn inserted_index(&self, index: usize, value: Cow<V>, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError>;
+    fn inserted_bit_index(&self, index: usize, value: Cow<V>, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError>;
     fn updated(&self, bit: B, value: Cow<V>, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError>;
-    fn updated_index(&self, index: usize, value: Cow<V>, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError>;
+    fn updated_bit_index(&self, index: usize, value: Cow<V>, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError>;
     fn removed(&self, bit: B, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError>;
-    fn removed_index(&self, index: usize, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError>;
+    fn removed_bit_index(&self, index: usize, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError>;
 
     fn clone_impl(&self) -> Box<dyn BitIndexedArray::<B, V, E>>;
     
@@ -74,62 +75,45 @@ impl <B: BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Nt
         }
     }
 
-    fn at_index(&self, index: usize) -> Result<&V, BitError> {
+    fn at_bit_index(&self, index: usize) -> Result<&V, BitError> {
         Ok(&self.values[self.bits.bit_index(B::nth_bit(index)?)?])
+    }
+
+    fn at_index(&self, index: usize) -> Result<&V, BitError> {
+        if index < SIZE {
+            Ok(&self.values[index])
+        }
+        else {
+            Err(BitError::Range)
+        }
     }
 
     fn inserted(&self, bit: B, value: Cow<V>, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError> {
         let bits = self.bits.bit_insert(bit.clone())?;
         let index = bits.bit_index(bit)?;
-        let mut building = VecDeque::<V>::new();
-        for i in 0..index {
-            building.push_back(self.values[i].clone());
-        }
-        building.push_back(value.into_owned());
-        for i in index..SIZE {
-            building.push_back(self.values[i].clone());
-        }
-        new_bit_indexed_array(bits, building, extra.into_owned())
+        new_bit_indexed_array(bits, BitIndexedArrayInsert::new(self, index, value.into_owned()), extra.into_owned())
     }
 
-    fn inserted_index(&self, index: usize, value: Cow<V>, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError> {
+    fn inserted_bit_index(&self, index: usize, value: Cow<V>, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError> {
         self.inserted(B::nth_bit(index)?, value, extra)
     }
     
     fn updated(&self, bit: B, value: Cow<V>, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError> {
-        if !self.bits.bit_contains(bit.clone())? {
-            return Err(BitError::NotFound);
-        }
         let index = self.bits.bit_index(bit)?;
-        let mut building = VecDeque::<V>::new();
-        for i in 0..index {
-            building.push_back(self.values[i].clone());
-        }
-        building.push_back(value.into_owned());
-        for i in index+1..SIZE {
-            building.push_back(self.values[i].clone());
-        }
-        new_bit_indexed_array(self.bits.clone(), building, extra.into_owned())
+        new_bit_indexed_array(self.bits.clone(), BitIndexedArrayUpdate::new(self, index, value.into_owned()), extra.into_owned())
     }
 
-    fn updated_index(&self, index: usize, value: Cow<V>, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError> {
+    fn updated_bit_index(&self, index: usize, value: Cow<V>, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError> {
         self.updated(B::nth_bit(index)?, value, extra)
     }
     
     fn removed(&self, bit: B, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError> {
         let bits = self.bits.bit_remove(bit.clone())?;
         let index = self.bits.bit_index(bit)?;
-        let mut building = VecDeque::<V>::new();
-        for i in 0..index {
-            building.push_back(self.values[i].clone());
-        }
-        for i in index+1..SIZE {
-            building.push_back(self.values[i].clone());
-        }
-        new_bit_indexed_array(bits, building, extra.into_owned())
+        new_bit_indexed_array(bits, BitIndexedArrayRemove::new(self, index), extra.into_owned())
     }
     
-    fn removed_index(&self, index: usize, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError> {
+    fn removed_bit_index(&self, index: usize, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError> {
         self.removed(B::nth_bit(index)?, extra)
     }
     
@@ -150,12 +134,112 @@ impl <B: BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Nt
     }
 }
 
+pub(crate) trait BitIndexedArrayValues<B, V: Clone, E: Clone> {
+    fn len(&self) -> usize;
+    fn at_index(&mut self, index: usize) -> V;
+}
+
+pub(crate) struct BitIndexedArrayVec<'a, V: Clone> {
+    values: &'a [V],
+}
+
+impl <'a, V: Clone> BitIndexedArrayVec<'a, V> {
+    pub(crate) fn new(values: &'a [V]) -> Self {
+        Self {values}
+    }
+}
+
+impl <'a, B: 'static, V: Clone + 'static, E: Clone + 'static> BitIndexedArrayValues<B, V, E> for BitIndexedArrayVec<'a, V> {
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    fn at_index(&mut self, index: usize) -> V {
+        self.values.get(index).unwrap().clone()
+    }
+}
+
+struct BitIndexedArrayInsert<'a, B, V: Clone, E: Clone> {
+    existing: &'a dyn BitIndexedArray<B, V, E>,
+    index: usize,
+    value: Option<V>,
+}
+
+impl <'a, B, V: Clone, E: Clone> BitIndexedArrayInsert<'a, B, V, E> {
+    fn new(existing: &'a dyn BitIndexedArray<B, V, E>, index: usize, value: V) -> Self {
+        Self {existing, index, value: Some(value)}
+    }
+}
+
+impl <'a, B: 'static, V: Clone + 'static, E: Clone + 'static> BitIndexedArrayValues<B, V, E> for BitIndexedArrayInsert<'a, B, V, E> {
+    fn len(&self) -> usize {
+        self.existing.len() + 1
+    }
+
+    fn at_index(&mut self, index: usize) -> V {
+        match index.cmp(&self.index) {
+            Ordering::Less => self.existing.at_index(index).unwrap().clone(),
+            Ordering::Equal => self.value.take().unwrap(),
+            Ordering::Greater => self.existing.at_index(index - 1).unwrap().clone(),
+        }
+    }
+}
+
+struct BitIndexedArrayUpdate<'a, B, V: Clone, E: Clone> {
+    existing: &'a dyn BitIndexedArray<B, V, E>,
+    index: usize,
+    value: Option<V>,
+}
+
+impl <'a, B, V: Clone, E: Clone> BitIndexedArrayUpdate<'a, B, V, E> {
+    fn new(existing: &'a dyn BitIndexedArray<B, V, E>, index: usize, value: V) -> Self {
+        Self {existing, index, value: Some(value)}
+    }
+}
+
+impl <'a, B: 'static, V: Clone + 'static, E: Clone + 'static> BitIndexedArrayValues<B, V, E> for BitIndexedArrayUpdate<'a, B, V, E> {
+    fn len(&self) -> usize {
+        self.existing.len()
+    }
+
+    fn at_index(&mut self, index: usize) -> V {
+        match index.cmp(&self.index) {
+            Ordering::Less => self.existing.at_index(index).unwrap().clone(),
+            Ordering::Equal => self.value.take().unwrap(),
+            Ordering::Greater => self.existing.at_index(index).unwrap().clone(),
+        }
+    }
+}
+
+struct BitIndexedArrayRemove<'a, B, V: Clone, E: Clone> {
+    existing: &'a dyn BitIndexedArray<B, V, E>,
+    index: usize,
+}
+
+impl <'a, B, V: Clone, E: Clone> BitIndexedArrayRemove<'a, B, V, E> {
+    fn new(existing: &'a dyn BitIndexedArray<B, V, E>, index: usize) -> Self {
+        Self {existing, index}
+    }
+}
+
+impl <'a, B: 'static, V: Clone + 'static, E: Clone + 'static> BitIndexedArrayValues<B, V, E> for BitIndexedArrayRemove<'a, B, V, E> {
+    fn len(&self) -> usize {
+        self.existing.len() - 1
+    }
+
+    fn at_index(&mut self, index: usize) -> V {
+        match index.cmp(&self.index) {
+            Ordering::Less => self.existing.at_index(index).unwrap().clone(),
+            _ => self.existing.at_index(index + 1).unwrap().clone(),
+        }
+    }
+}
+
 pub(crate) fn default_bit_indexed_array<B: BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + NthBit + PartialEq + 'static, V: Clone + 'static, E: Clone + Default + 'static>() -> Box<dyn BitIndexedArray<B, V, E>> {
     Box::new(BitIndexedArrayImpl::<B, V, E, 0>::default())
 }
 
-pub(crate) fn new_bit_indexed_array<B: BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + NthBit + PartialEq + 'static, V: Clone + 'static, E: Clone + Default + 'static>(bits: B, values: impl Into<VecDeque<V>>, extra: E) -> Result<Box<dyn BitIndexedArray<B, V, E>>, BitError> {
-    let values: VecDeque<V> = values.into();
+pub(crate) fn new_bit_indexed_array<B: BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + NthBit + PartialEq + 'static, V: Clone + 'static, E: Clone + Default + 'static>(bits: B, values: impl BitIndexedArrayValues<B, V, E>, extra: E) -> Result<Box<dyn BitIndexedArray<B, V, E>>, BitError> {
     if bits.count_ones_t() != values.len() {
         return Err(BitError::CountNotEqualToOne);
     }
@@ -311,7 +395,11 @@ impl <B: Clone + 'static, V: Clone + 'static, E: Clone + 'static> Clone for Box<
 
 impl <B: CountOnes + Default, V, E: Default> Default for BitIndexedArrayImpl<B, V, E, 0> {
     fn default() -> Self {
-        Self::new(B::default(), Vec::new(), E::default()).unwrap()
+        Self {
+            bits: B::default(),
+            values: [],
+            extra: E::default(),
+        }
     }
 }
 
@@ -405,13 +493,13 @@ mod tests {
     
     #[test]
     fn bit_indexed_array_insert() {
-        let mut bia: Box<dyn BitIndexedArray<_,_,_>> = Box::new(BitIndexedArrayImpl::<_,_,_,2>::new(0b101_u64, vec!(13, 42), Zst{}).unwrap());
+        let mut bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), Zst{}).unwrap();
         bia = bia.as_ref().inserted(0b10, Cow::Owned(3), Cow::Owned(Zst{})).unwrap();
         assert_eq!(bia.as_ref().len(), 3);
-        assert_eq!(*bia.as_ref().at_index(0).unwrap(), 13);
-        assert_eq!(*bia.as_ref().at_index(1).unwrap(), 3);
-        assert_eq!(*bia.as_ref().at_index(2).unwrap(), 42);
-        assert!(bia.as_ref().at_index(3).is_err());
+        assert_eq!(*bia.as_ref().at_bit_index(0).unwrap(), 13);
+        assert_eq!(*bia.as_ref().at_bit_index(1).unwrap(), 3);
+        assert_eq!(*bia.as_ref().at_bit_index(2).unwrap(), 42);
+        assert!(bia.as_ref().at_bit_index(3).is_err());
         assert_eq!(*bia.as_ref().at(0b1).unwrap(), 13);
         assert_eq!(*bia.as_ref().at(0b10).unwrap(), 3);
         assert_eq!(*bia.as_ref().at(0b100).unwrap(), 42);
@@ -421,26 +509,26 @@ mod tests {
 
     #[test]
     fn bit_indexed_array_insert_reinsert_failure() {
-        let bia: Box<dyn BitIndexedArray<_,_,_>> = Box::new(BitIndexedArrayImpl::<_,_,_,2>::new(0b101_u64, vec!(13, 42), Zst{}).unwrap());
+        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), Zst{}).unwrap();
         assert!(bia.as_ref().inserted(0b100, Cow::Owned(3), Cow::Owned(Zst{})).is_err());
     }
 
     #[test]
     fn bit_indexed_array_insert_multibit_failure() {
-        let bia: Box<dyn BitIndexedArray<_,_,_>> = Box::new(BitIndexedArrayImpl::<_,_,_,2>::new(0b101_u64, vec!(13, 42), Zst{}).unwrap());
+        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), Zst{}).unwrap();
         assert!(bia.as_ref().inserted(0b1010, Cow::Owned(3), Cow::Owned(Zst{})).is_err());
     }
 
     #[test]
     fn bit_indexed_array_update() {
-        let mut bia: Box<dyn BitIndexedArray<_,_,_>> = Box::new(BitIndexedArrayImpl::<_,_,_,3>::new(0b1101_u64, vec!(13, 42, 8), Zst{}).unwrap());
+        let mut bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), Zst{}).unwrap();
         bia = bia.as_ref().updated(0b1000, Cow::Owned(11), Cow::Owned(Zst{})).unwrap();
         assert_eq!(bia.as_ref().len(), 3);
-        assert_eq!(*bia.as_ref().at_index(0).unwrap(), 13);
-        assert!(bia.as_ref().at_index(1).is_err());
-        assert_eq!(*bia.as_ref().at_index(2).unwrap(), 42);
-        assert_eq!(*bia.as_ref().at_index(3).unwrap(), 11);
-        assert!(bia.as_ref().at_index(4).is_err());
+        assert_eq!(*bia.as_ref().at_bit_index(0).unwrap(), 13);
+        assert!(bia.as_ref().at_bit_index(1).is_err());
+        assert_eq!(*bia.as_ref().at_bit_index(2).unwrap(), 42);
+        assert_eq!(*bia.as_ref().at_bit_index(3).unwrap(), 11);
+        assert!(bia.as_ref().at_bit_index(4).is_err());
         assert_eq!(*bia.as_ref().at(0b1).unwrap(), 13);
         assert!(bia.as_ref().at(0b10).is_err());
         assert_eq!(*bia.as_ref().at(0b100).unwrap(), 42);
@@ -451,26 +539,26 @@ mod tests {
 
     #[test]
     fn bit_indexed_array_update_absent_failure() {
-        let bia: Box<dyn BitIndexedArray<_,_,_>> = Box::new(BitIndexedArrayImpl::<_,_,_,2>::new(0b101_u64, vec!(13, 42), Zst{}).unwrap());
+        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), Zst{}).unwrap();
         assert!(bia.as_ref().updated(0b10, Cow::Owned(3), Cow::Owned(Zst{})).is_err());
     }
 
     #[test]
     fn bit_indexed_array_update_multibit_failure() {
-        let bia: Box<dyn BitIndexedArray<_,_,_>> = Box::new(BitIndexedArrayImpl::<_,_,_,2>::new(0b101_u64, vec!(13, 42), Zst{}).unwrap());
+        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), Zst{}).unwrap();
         assert!(bia.as_ref().updated(0b101, Cow::Owned(3), Cow::Owned(Zst{})).is_err());
     }
 
     #[test]
     fn bit_indexed_array_update_index() {
-        let mut bia: Box<dyn BitIndexedArray<_,_,_>> = Box::new(BitIndexedArrayImpl::<_,_,_,3>::new(0b1101_u64, vec!(13, 42, 8), Zst{}).unwrap());
-        bia = bia.as_ref().updated_index(2, Cow::Owned(11), Cow::Owned(Zst{})).unwrap();
+        let mut bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), Zst{}).unwrap();
+        bia = bia.as_ref().updated_bit_index(2, Cow::Owned(11), Cow::Owned(Zst{})).unwrap();
         assert_eq!(bia.as_ref().len(), 3);
-        assert_eq!(*bia.as_ref().at_index(0).unwrap(), 13);
-        assert!(bia.as_ref().at_index(1).is_err());
-        assert_eq!(*bia.as_ref().at_index(2).unwrap(), 11);
-        assert_eq!(*bia.as_ref().at_index(3).unwrap(), 8);
-        assert!(bia.as_ref().at_index(4).is_err());
+        assert_eq!(*bia.as_ref().at_bit_index(0).unwrap(), 13);
+        assert!(bia.as_ref().at_bit_index(1).is_err());
+        assert_eq!(*bia.as_ref().at_bit_index(2).unwrap(), 11);
+        assert_eq!(*bia.as_ref().at_bit_index(3).unwrap(), 8);
+        assert!(bia.as_ref().at_bit_index(4).is_err());
         assert_eq!(*bia.as_ref().at(0b1).unwrap(), 13);
         assert!(bia.as_ref().at(0b10).is_err());
         assert_eq!(*bia.as_ref().at(0b100).unwrap(), 11);
@@ -481,20 +569,20 @@ mod tests {
 
     #[test]
     fn bit_indexed_array_update_absent_index_failure() {
-        let bia: Box<dyn BitIndexedArray<_,_,_>> = Box::new(BitIndexedArrayImpl::<_,_,_,2>::new(0b101_u64, vec!(13, 42), Zst{}).unwrap());
-        assert!(bia.as_ref().updated_index(1, Cow::Owned(3), Cow::Owned(Zst{})).is_err());
+        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), Zst{}).unwrap();
+        assert!(bia.as_ref().updated_bit_index(1, Cow::Owned(3), Cow::Owned(Zst{})).is_err());
     }
 
     #[test]
     fn bit_indexed_array_remove() {
-        let mut bia: Box<dyn BitIndexedArray<_,_,_>> = Box::new(BitIndexedArrayImpl::<_,_,_,3>::new(0b1101_u64, vec!(13, 42, 8), Zst{}).unwrap());
+        let mut bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), Zst{}).unwrap();
         bia = bia.as_ref().removed(0b1000, Cow::Owned(Zst{})).unwrap();
         assert_eq!(bia.as_ref().len(), 2);
-        assert_eq!(*bia.as_ref().at_index(0).unwrap(), 13);
-        assert!(bia.as_ref().at_index(1).is_err());
-        assert_eq!(*bia.as_ref().at_index(2).unwrap(), 42);
-        assert!(bia.as_ref().at_index(3).is_err());
-        assert!(bia.as_ref().at_index(4).is_err());
+        assert_eq!(*bia.as_ref().at_bit_index(0).unwrap(), 13);
+        assert!(bia.as_ref().at_bit_index(1).is_err());
+        assert_eq!(*bia.as_ref().at_bit_index(2).unwrap(), 42);
+        assert!(bia.as_ref().at_bit_index(3).is_err());
+        assert!(bia.as_ref().at_bit_index(4).is_err());
         assert_eq!(*bia.as_ref().at(0b1).unwrap(), 13);
         assert!(bia.as_ref().at(0b10).is_err());
         assert_eq!(*bia.as_ref().at(0b100).unwrap(), 42);
@@ -504,13 +592,13 @@ mod tests {
 
     #[test]
     fn bit_indexed_array_remove_absent_failure() {
-        let bia: Box<dyn BitIndexedArray<_,_,_>> = Box::new(BitIndexedArrayImpl::<_,_,_,3>::new(0b1101_u64, vec!(13, 42, 8), Zst{}).unwrap());
+        let bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), Zst{}).unwrap();
         assert!(bia.as_ref().removed(0b10, Cow::Owned(Zst{})).is_err());
     }
 
     #[test]
     fn bit_indexed_array_remove_multibit_failure() {
-        let bia: Box<dyn BitIndexedArray<_,_,_>> = Box::new(BitIndexedArrayImpl::<_,_,_,3>::new(0b1101_u64, vec!(13, 42, 8), Zst{}).unwrap());
+        let bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), Zst{}).unwrap();
         assert!(bia.as_ref().removed(0b101, Cow::Owned(Zst{})).is_err());
     }
 

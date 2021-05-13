@@ -110,7 +110,7 @@ pub(super) fn lift_to_cnode_and_insert<'a, B: Bits, V: Value, H: HasherBv<B, V>>
 
 fn lift_to_cnode_and_insert_recursion<B: Bits, V: Value, H: HasherBv<B, V>>(this: MNode<B, V, H>, this_flag: Flag<B>, snode: Arc<SNode<V>>, snode_flag: Flag<B>) -> CNode<B, V, H> {
     if this_flag.flag() == snode_flag.flag() {
-        CNode::new(new_bit_indexed_array(this_flag.flag(), vec!(MNode::C(lift_to_cnode_and_insert_recursion(this, this_flag.next().unwrap(), snode, snode_flag.next().unwrap()))), 2_usize).unwrap())
+        CNode::new(new_bit_indexed_array(this_flag.flag(), BitIndexedArrayVec::new(&[MNode::C(lift_to_cnode_and_insert_recursion(this, this_flag.next().unwrap(), snode, snode_flag.next().unwrap()))]), 2_usize).unwrap())
     }
     else  {
         let flags = this_flag.flag().bit_insert(snode_flag.flag()).unwrap();
@@ -119,7 +119,7 @@ fn lift_to_cnode_and_insert_recursion<B: Bits, V: Value, H: HasherBv<B, V>>(this
         } else {
             vec!(MNode::S(snode), this)
         };
-        CNode::new(new_bit_indexed_array(flags, values, 2_usize).unwrap())
+        CNode::new(new_bit_indexed_array(flags, BitIndexedArrayVec::new(&values), 2_usize).unwrap())
     }
 }
 
