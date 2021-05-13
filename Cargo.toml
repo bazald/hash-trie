@@ -1,0 +1,9 @@
+[package]
+name = "hash-trie"
+version = "0.0.1"
+authors = ["Mitchell Keith Bloch <bazald@gmail.com>"]
+description = "Hash Array Mapped Trie (HAMT) and Ctrie implementations (in progress)"
+readme = "README.md"
+edition = "2018"
+repository = "https://github.com/bazald/hash-trie/"
+license = "MPL-2.0"
