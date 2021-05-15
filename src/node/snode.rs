@@ -1,6 +1,6 @@
 use crate::{flag::*, result::*, traits::*};
 use super::{cnode::*, lnode::LNodeNext};
-use alloc::{borrow::Cow, fmt::Debug, sync::Arc};
+use alloc::{fmt::Debug, sync::Arc};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SNode<V: Value> {
@@ -12,21 +12,26 @@ impl <V: Value> SNode<V> {
         Arc::new(Self {value})
     }
 
-    pub(super) fn get(&self) -> &V {
-        &self.value
-    }
-
-    pub(super) fn find<'a>(&'a self, value: &V) -> FindResult<'a, V> {
-        if self.value == *value {
+    pub(super) fn find<'a, K>(&'a self, key: &K) -> FindResult<'a, V> where V: PartialEq<K> {
+        if self.value == *key {
             FindResult::Found(&self.value)
         }
         else {
             FindResult::NotFound
         }
     }
+    
+    pub(super) fn remove<'a, B: Bits, K, H: 'static>(&'a self, key: &K) -> RemoveResult<'a, B, V, H> where V: PartialEq<K> {
+        if self.value == *key {
+            RemoveResult::RemovedZ(&self.value)
+        }
+        else {
+            RemoveResult::NotFound
+        }
+    }
 
-    pub(super) fn remove<'a>(&'a self, value: &V) -> SNodeRemoveResult<'a, V> {
-        if self.value == *value {
+    pub(super) fn remove_from_snode<'a, K>(&'a self, key: &K) -> SNodeRemoveResult<'a, V> where V: PartialEq<K> {
+        if self.value == *key {
             SNodeRemoveResult::RemovedZ(&self.value)
         }
         else {
@@ -35,11 +40,16 @@ impl <V: Value> SNode<V> {
     }
 }
 
-pub(super) fn insert<'a, B: Bits, V: Value, H: HasherBv<B, V>>(this: &'a Arc<SNode<V>>, value: Cow<V>, value_flag: Option<Flag<B>>) -> InsertResult<'a, B, V, H> {
-    if this.value == *value {
-        InsertResult::Found(&this.value)
+pub(super) fn insert<'a, B: Bits, K: 'static, V: Value, C: AsRef<K> + Into<V>, H: HasherBv<B, V>>(this: &'a Arc<SNode<V>>, value: C, value_flag: Option<Flag<B>>, replace: bool) -> InsertResult<'a, B, V, H> where V: PartialEq<K> {
+    if this.value == *value.as_ref() {
+        if replace {
+            InsertResult::InsertedS(this.clone(), Some(&this.value))
+        }
+        else {
+            InsertResult::Found(&this.value)
+        }
     }
     else {
-        lift_to_cnode_and_insert(LNodeNext::S(this.clone()), H::default().hash(&this.value), value, value_flag)
+        lift_to_cnode_and_insert(LNodeNext::S(this.clone()), H::default().hash(&this.value), value.into(), value_flag)
     }
 }

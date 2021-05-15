@@ -8,8 +8,9 @@ pub(crate) enum FindResult<'a, V: Value> {
 
 pub(crate) enum InsertResult<'a, B: Bits, V: Value, H: 'static> {
     Found(&'a V),
-    InsertedC(CNode<B, V, H>),
-    InsertedL(Arc<LNode<V>>),
+    InsertedC(CNode<B, V, H>, Option<&'a V>),
+    InsertedL(Arc<LNode<V>>, Option<&'a V>),
+    InsertedS(Arc<SNode<V>>, Option<&'a V>),
 }
 
 pub(crate) enum RemoveResult<'a, B: Bits, V: Value, H: 'static> {

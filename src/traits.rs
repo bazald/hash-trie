@@ -215,3 +215,7 @@ impl <V: Default + 'static, H: Default + Hasher + 'static> HasherBv<u64, V> for 
         hasher.finish()
     }
 }
+
+/// `HashLike` provides a means to assert that two types will hash identically.
+pub trait HashLike<T> {}
+impl <T> HashLike<T> for T {}
