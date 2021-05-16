@@ -13,5 +13,5 @@ keywords = ["memory", "concurrency", "performance", "immutable", "generic"]
 rand = "0.8.3"
 
 [features]
-default = ["std"]
+default = []
 std = []
