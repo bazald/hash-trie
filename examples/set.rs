@@ -81,7 +81,7 @@ fn hash_set_inc() -> u128 {
 fn hash_trie_set() -> u128 {
     let (insertions, searches, removals) = get_values();
 
-    let mut hash_trie = HashTrieSet::<u64, i32, DefaultHasher>::new();
+    let mut hash_trie = HashTrieSet::<u32, i32, DefaultHasher>::new();
 
     let t0 = SystemTime::now();
 

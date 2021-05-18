@@ -1,5 +1,6 @@
 use crate::{flag::*, traits::*, node::*, result::*, HashTrieError};
 use alloc::{fmt::Debug};
+use core::hash::Hash;
 
 #[derive(Debug)]
 pub(crate) struct HashTrie <B: Bits, V: Value, H: HasherBv<B, V>> {
@@ -19,14 +20,14 @@ impl <B: Bits, V: Value, H: HasherBv<B, V>> HashTrie<B, V, H> {
         }
     }
 
-    pub(crate) fn find<K: HashLike<V>>(&self, key: &K) -> Result<&V, HashTrieError> where V: PartialEq<K>, H: HasherBv<B, K> {
+    pub(crate) fn find<K: Hash + HashLike<V>>(&self, key: &K) -> Result<&V, HashTrieError> where V: PartialEq<K>, H: HasherBv<B, K> {
         match self.root.find(key, Some(Flag::new(H::default().hash(key)))) {
             FindResult::NotFound => Err(HashTrieError::NotFound),
             FindResult::Found(found) => Ok(found)
         }
     }
 
-    pub(crate) fn insert<'a, K: HashLike<V> + 'static, C: AsRef<K> + Into<V>>(&'a self, value: C, replace: bool) -> Result<(Self, Option<&V>), &V> where V: PartialEq<K>, H: HasherBv<B, K> {
+    pub(crate) fn insert<'a, K: Hash + HashLike<V> + 'static, C: AsRef<K> + Into<V>>(&'a self, value: C, replace: bool) -> Result<(Self, Option<&V>), &V> where V: PartialEq<K>, H: HasherBv<B, K> {
         let flag = Flag::from(H::default().hash(value.as_ref()));
         match self.root.insert(value, Some(flag), replace) {
             InsertResult::Found(found) => Err(found),
@@ -36,7 +37,7 @@ impl <B: Bits, V: Value, H: HasherBv<B, V>> HashTrie<B, V, H> {
         }
     }
 
-    pub(crate) fn remove<K: HashLike<V> + 'static>(&self, key: &K) -> Result<(Self, &V), HashTrieError> where V: PartialEq<K>, H: HasherBv<B, K> {
+    pub(crate) fn remove<K: Hash + HashLike<V> + 'static>(&self, key: &K) -> Result<(Self, &V), HashTrieError> where V: PartialEq<K>, H: HasherBv<B, K> {
         match self.root.remove(key, Some(Flag::from(H::default().hash(key)))) {
             RemoveResult::NotFound => Err(HashTrieError::NotFound),
             RemoveResult::RemovedC(cnode, removed) => Ok((Self::singleton(MNode::C(cnode)), removed)),

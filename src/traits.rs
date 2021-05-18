@@ -204,18 +204,26 @@ pub trait Value: Clone + Debug + Eq + PartialEq + Hash + Send + Sync + 'static {
 impl <T: Clone + Debug + Eq + PartialEq + Hash + Send + Sync + 'static> Value
 for T where T: Clone + Debug + Eq + PartialEq + Hash + Send + Sync + 'static {}
 
+/// `HashLike` provides a means to assert that two types will hash identically.
+pub trait HashLike<T> {}
+impl <T> HashLike<T> for T {}
+
 /// `HasherBv` provides a generalization of the Hasher trait to support different word sizes for the hash values.
 pub trait HasherBv<B, V>: Default + 'static {
     fn hash(&self, value: &V) -> B;
 }
-impl <V: Default + 'static, H: Default + Hasher + 'static> HasherBv<u64, V> for H {
-    fn hash(&self, value: &V) -> u64 {
-        let mut hasher = H::default();
-        hasher.write(unsafe { core::slice::from_raw_parts(value as *const V as *const u8, mem::size_of::<V>()) });
-        hasher.finish()
-    }
+macro_rules! hasher_bv_impl {
+    ( $type:ty ) => {
+        impl <V: Default + Hash + 'static, H: Default + Hasher + 'static> HasherBv<$type, V> for H {
+            fn hash(&self, value: &V) -> $type {
+                let mut hasher = H::default();
+                value.hash(&mut hasher);
+                hasher.finish() as $type
+            }
+        }
+    };
 }
-
-/// `HashLike` provides a means to assert that two types will hash identically.
-pub trait HashLike<T> {}
-impl <T> HashLike<T> for T {}
+hasher_bv_impl!(u8);
+hasher_bv_impl!(u16);
+hasher_bv_impl!(u32);
+hasher_bv_impl!(u64);

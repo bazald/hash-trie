@@ -29,10 +29,10 @@ pub use set::HashTrieSet as HashTrieSet;
 pub use map::HashTrieMap as HashTrieMap;
 
 #[cfg(any(feature = "std", test))]
-pub type DefaultHashTrieSet<V> = set::HashTrieSet<u64, V, std::collections::hash_map::DefaultHasher>;
+pub type DefaultHashTrieSet<V> = set::HashTrieSet<u32, V, std::collections::hash_map::DefaultHasher>;
 
 #[cfg(any(feature = "std", test))]
-pub type DefaultHashTrieMap<K, V> = map::HashTrieMap<u64, K, V, std::collections::hash_map::DefaultHasher>;
+pub type DefaultHashTrieMap<K, V> = map::HashTrieMap<u32, K, V, std::collections::hash_map::DefaultHasher>;
 
 #[cfg(test)]
 mod tests {

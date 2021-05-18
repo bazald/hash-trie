@@ -81,7 +81,7 @@ fn hash_map_inc() -> u128 {
 fn hash_trie_map() -> u128 {
     let (insertions, searches, removals) = get_values();
 
-    let mut hash_trie = HashTrieMap::<u64, i32, i32, DefaultHasher>::new();
+    let mut hash_trie = HashTrieMap::<u32, i32, i32, DefaultHasher>::new();
 
     let t0 = SystemTime::now();
 
