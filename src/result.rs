@@ -1,6 +1,19 @@
 use crate::{node::{CNode, LNode, SNode}, traits::*};
 use alloc::sync::Arc;
 
+/// `BitError` enumerates possible error conditions when bitops are used "incorrectly."
+#[derive(Debug)]
+pub enum BitError {
+    /// `BitError::CountNotEqualToOne` indicates a word representing a bit contains either 2 or more bits or 0 bits.
+    CountNotEqualToOne,
+    /// `BitError::Found` indicates a bit that is supposed to be absent is present.
+    Found,
+    /// `BitError::NotFound` indicates a bit that is supposed to be present is absent.
+    NotFound,
+    /// `BitError::Range` indicates an index exceeding the word size was used.
+    Range,
+}
+
 pub(crate) enum FindResult<'a, V: Value> {
     NotFound,
     Found(&'a V),

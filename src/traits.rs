@@ -1,18 +1,6 @@
+use crate::result::BitError;
 use alloc::fmt::Debug;
 use core::{convert::{TryFrom, TryInto}, hash::{Hash, Hasher}, mem, ops::*};
-
-/// `BitError` enumerates possible error conditions when bitops are used "incorrectly."
-#[derive(Debug)]
-pub enum BitError {
-    /// `BitError::CountNotEqualToOne` indicates a word representing a bit contains either 2 or more bits or 0 bits.
-    CountNotEqualToOne,
-    /// `BitError::Found` indicates a bit that is supposed to be absent is present.
-    Found,
-    /// `BitError::NotFound` indicates a bit that is supposed to be present is absent.
-    NotFound,
-    /// `BitError::Range` indicates an index exceeding the word size was used.
-    Range,
-}
 
 macro_rules! bit_count_one {
     ( $bit:expr) => {
@@ -194,10 +182,12 @@ impl NthBit for u64 { fn nth_bit(n: usize) -> Result<Self, BitError> {bit_in_ran
 impl NthBit for u128 { fn nth_bit(n: usize) -> Result<Self, BitError> {bit_in_range!(u128, n); Ok(1_u128 << n)} }
 impl NthBit for usize { fn nth_bit(n: usize) -> Result<Self, BitError> {bit_in_range!(usize, n); Ok(1_usize << n)} }
 
+/// `Hashword` lists the requirements on hash values.
 pub trait Hashword: BitAnd + Clone + From<<Self as Shr<usize>>::Output> + PartialEq + Shr<usize> + 'static {}
 impl <H: BitAnd + Clone + From<<Self as Shr<usize>>::Output> + PartialEq + Shr<usize>> Hashword
 for H where H: BitAnd + Clone + From<<Self as Shr<usize>>::Output> + PartialEq + Shr<usize> + 'static {}
 
+/// `Flagword` lists the requirements on CNode indices.
 pub trait Flagword<H: Hashword>: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + NthBit + PartialEq + 'static {}
 impl <H: Hashword, F: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + NthBit + PartialEq> Flagword<H>
 for F where F: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + NthBit + PartialEq + 'static {}

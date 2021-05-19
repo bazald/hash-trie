@@ -79,7 +79,7 @@ impl <'a, K: Clone + Debug, V: Clone + Debug> AsRef<K> for CowMapEntry<'a, K, V>
 /// use hash_trie::HashTrieMap;
 /// use std::{borrow::Cow, collections::hash_map::DefaultHasher};
 ///
-/// let mut hash_map: HashTrieMap<u64, String, String, DefaultHasher> = HashTrieMap::new();
+/// let mut hash_map: HashTrieMap<u64, u32, String, String, DefaultHasher> = HashTrieMap::new();
 /// let hello: String = "Hello,".into();
 /// let world: String = "world!,".into();
 ///

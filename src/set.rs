@@ -62,7 +62,7 @@ impl <V> HashLike<SetEntry<V>> for V {}
 /// use hash_trie::HashTrieSet;
 /// use std::{borrow::Cow, collections::hash_map::DefaultHasher};
 ///
-/// let mut hash_set: HashTrieSet<u64, String, DefaultHasher> = HashTrieSet::new();
+/// let mut hash_set: HashTrieSet<u64, u32, String, DefaultHasher> = HashTrieSet::new();
 /// let hello_world: String = "Hello, world!".into();
 ///
 /// hash_set = hash_set.insert(Cow::Borrowed(&hello_world), false).unwrap().0;

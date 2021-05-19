@@ -1,4 +1,4 @@
-use crate::traits::*;
+use crate::{result::BitError, traits::*};
 use alloc::{borrow::Cow, boxed::Box, fmt::{Debug, Formatter}};
 use core::{cmp::Ordering, mem, ptr};
 

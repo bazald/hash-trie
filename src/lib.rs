@@ -18,6 +18,8 @@ mod node;
 mod set;
 pub mod traits;
 
+pub use result::BitError as BitError;
+
 /// The only error you'll find is `NotFound`.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum HashTrieError {
