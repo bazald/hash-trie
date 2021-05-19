@@ -10,6 +10,7 @@ pub(crate) enum MNode <H: Hashword, F: Flagword<H>, V: Value, M: 'static> {
 }
 
 impl <H: Hashword, F: Flagword<H>, V: Value, M: 'static> MNode<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+    #[must_use]
     pub(super) fn size(&self) -> usize {
         match self {
             Self::C(cnode) => cnode.size(),

@@ -8,6 +8,7 @@ pub(crate) struct SNode<V: Value> {
 }
 
 impl <V: Value> SNode<V> {
+    #[must_use]
     pub(super) fn new(value: V) -> Arc<Self> {
         Arc::new(Self {value})
     }

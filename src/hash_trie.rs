@@ -8,12 +8,14 @@ pub(crate) struct HashTrie <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H
 }
 
 impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> HashTrie<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+    #[must_use]
     pub(crate) fn new() -> Self {
         Self {
             root: MNode::<H, F, V, M>::default()
         }
     }
 
+    #[must_use]
     fn singleton(mnode: MNode<H, F, V, M>) -> Self {
         Self {
             root: mnode

@@ -39,6 +39,7 @@ macro_rules! bit_in_range {
 /// `AsUsize` supports conversion to usize for values within the word's index range.
 pub trait AsUsize {
     /// Simply cast or convert the value to a usize.
+    #[must_use]
     fn as_usize(&self) -> usize;
 }
 impl AsUsize for u8 { fn as_usize(&self) -> usize {*self as usize} }
@@ -109,6 +110,7 @@ pub trait CountOnes {
     /// Count the number of 1s in the word using `count_ones()`.
     /// 
     /// e.g. `0b10110.count_ones_t() == 3`
+    #[must_use]
     fn count_ones_t(&self) -> usize;
 }
 impl CountOnes for u8 { fn count_ones_t(&self) -> usize {self.count_ones() as usize} }
@@ -123,6 +125,7 @@ pub trait LogB {
     /// Get the log_2 of the word size.
     /// 
     /// e.g. `u32::log_b() == 5`
+    #[must_use]
     fn log_b() -> usize;
 }
 impl LogB for u8 { fn log_b() -> usize {3} }
@@ -148,6 +151,7 @@ pub trait MaskLogB<T> {
     /// Get the mask, length log_2 of the word size.
     /// 
     /// e.g. `u32::mask_log_b() == 0b11111`
+    #[must_use]
     fn mask_log_b() -> T;
 }
 impl <T: From<u8>> MaskLogB<T> for u8 { fn mask_log_b() -> T {0b111.into()} }
@@ -203,6 +207,7 @@ impl <T> HashLike<T> for T {}
 
 /// `HasherBv` provides a generalization of the Hasher trait to support different word sizes for the hash values.
 pub trait HasherBv<B, V>: Default + 'static {
+    #[must_use]
     fn hash(&self, value: &V) -> B;
 }
 macro_rules! hasher_bv_impl {

@@ -1,6 +1,6 @@
 [package]
 name = "hash-trie"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Mitchell Keith Bloch <bazald@gmail.com>"]
 description = "Hash Array Mapped Trie (HAMT) Immutable Set Implementation"
 readme = "README.md"

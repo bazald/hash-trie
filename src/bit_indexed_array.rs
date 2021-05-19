@@ -27,9 +27,13 @@ impl<B: CountOnes, V: Clone, E: Clone, const SIZE: usize> BitIndexedArrayImpl<B,
 }
 
 pub(crate) trait BitIndexedArray<B, V: Clone, E: Clone>: 'static {
+    #[must_use]
     fn bits(&self) -> B;
+    #[must_use]
     fn len(&self) -> usize;
+    #[must_use]
     fn values(&self) -> &[V];
+    #[must_use]
     fn extra(&self) -> &E;
 
     fn at(&self, bit: B) -> Result<&V, BitError>;
@@ -42,9 +46,12 @@ pub(crate) trait BitIndexedArray<B, V: Clone, E: Clone>: 'static {
     fn removed(&self, bit: B, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError>;
     fn removed_bit_index(&self, index: usize, extra: Cow<E>) -> Result<Box<dyn BitIndexedArray::<B, V, E>>, BitError>;
 
+    #[must_use]
     fn clone_impl(&self) -> Box<dyn BitIndexedArray::<B, V, E>>;
     
+    #[must_use]
     fn iter(&'_ self) -> core::slice::Iter<'_, V>;
+    #[must_use]
     fn iter_mut(&'_ mut self) -> core::slice::IterMut<'_, V>;
 }
 
@@ -135,7 +142,9 @@ impl <B: BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Nt
 }
 
 pub(crate) trait BitIndexedArrayValues<B, V: Clone, E: Clone> {
+    #[must_use]
     fn len(&self) -> usize;
+    #[must_use]
     fn at_index(&mut self, index: usize) -> V;
 }
 
@@ -144,16 +153,19 @@ pub(crate) struct BitIndexedArrayVec<'a, V: Clone> {
 }
 
 impl <'a, V: Clone> BitIndexedArrayVec<'a, V> {
+    #[must_use]
     pub(crate) fn new(values: &'a [V]) -> Self {
         Self {values}
     }
 }
 
 impl <'a, B: 'static, V: Clone + 'static, E: Clone + 'static> BitIndexedArrayValues<B, V, E> for BitIndexedArrayVec<'a, V> {
+    #[must_use]
     fn len(&self) -> usize {
         self.values.len()
     }
 
+    #[must_use]
     fn at_index(&mut self, index: usize) -> V {
         self.values.get(index).unwrap().clone()
     }
@@ -166,16 +178,19 @@ struct BitIndexedArrayInsert<'a, B, V: Clone, E: Clone> {
 }
 
 impl <'a, B, V: Clone, E: Clone> BitIndexedArrayInsert<'a, B, V, E> {
+    #[must_use]
     fn new(existing: &'a dyn BitIndexedArray<B, V, E>, index: usize, value: V) -> Self {
         Self {existing, index, value: Some(value)}
     }
 }
 
 impl <'a, B: 'static, V: Clone + 'static, E: Clone + 'static> BitIndexedArrayValues<B, V, E> for BitIndexedArrayInsert<'a, B, V, E> {
+    #[must_use]
     fn len(&self) -> usize {
         self.existing.len() + 1
     }
 
+    #[must_use]
     fn at_index(&mut self, index: usize) -> V {
         match index.cmp(&self.index) {
             Ordering::Less => self.existing.at_index(index).unwrap().clone(),
@@ -192,16 +207,19 @@ struct BitIndexedArrayUpdate<'a, B, V: Clone, E: Clone> {
 }
 
 impl <'a, B, V: Clone, E: Clone> BitIndexedArrayUpdate<'a, B, V, E> {
+    #[must_use]
     fn new(existing: &'a dyn BitIndexedArray<B, V, E>, index: usize, value: V) -> Self {
         Self {existing, index, value: Some(value)}
     }
 }
 
 impl <'a, B: 'static, V: Clone + 'static, E: Clone + 'static> BitIndexedArrayValues<B, V, E> for BitIndexedArrayUpdate<'a, B, V, E> {
+    #[must_use]
     fn len(&self) -> usize {
         self.existing.len()
     }
 
+    #[must_use]
     fn at_index(&mut self, index: usize) -> V {
         match index.cmp(&self.index) {
             Ordering::Less => self.existing.at_index(index).unwrap().clone(),
@@ -217,16 +235,19 @@ struct BitIndexedArrayRemove<'a, B, V: Clone, E: Clone> {
 }
 
 impl <'a, B, V: Clone, E: Clone> BitIndexedArrayRemove<'a, B, V, E> {
+    #[must_use]
     fn new(existing: &'a dyn BitIndexedArray<B, V, E>, index: usize) -> Self {
         Self {existing, index}
     }
 }
 
 impl <'a, B: 'static, V: Clone + 'static, E: Clone + 'static> BitIndexedArrayValues<B, V, E> for BitIndexedArrayRemove<'a, B, V, E> {
+    #[must_use]
     fn len(&self) -> usize {
         self.existing.len() - 1
     }
 
+    #[must_use]
     fn at_index(&mut self, index: usize) -> V {
         match index.cmp(&self.index) {
             Ordering::Less => self.existing.at_index(index).unwrap().clone(),
@@ -235,6 +256,7 @@ impl <'a, B: 'static, V: Clone + 'static, E: Clone + 'static> BitIndexedArrayVal
     }
 }
 
+#[must_use]
 pub(crate) fn default_bit_indexed_array<B: BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + NthBit + PartialEq + 'static, V: Clone + 'static, E: Clone + Default + 'static>() -> Box<dyn BitIndexedArray<B, V, E>> {
     Box::new(BitIndexedArrayImpl::<B, V, E, 0>::default())
 }

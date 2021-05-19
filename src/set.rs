@@ -8,6 +8,7 @@ struct SetEntry<V> {
 }
 
 impl <V> SetEntry<V> {
+    #[must_use]
     fn new(value: V) -> Self {
         Self {value}
     }
@@ -85,6 +86,7 @@ impl <V> HashLike<SetEntry<V>> for V {}
 /// }
 /// ```
 #[derive(Clone, Debug)]
+#[must_use]
 pub struct HashTrieSet <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     set: HashTrie<H, F, SetEntry<V>, M>,
 }

@@ -9,10 +9,12 @@ struct MapEntry<K, V> {
 }
 
 impl <K, V> MapEntry<K, V> {
+    #[must_use]
     fn new(key: K, value: V) -> Self {
         Self {key, value}
     }
 
+    #[must_use]
     fn as_ref(&self) -> (&K, &V) {
         (&self.key, &self.value)
     }
@@ -60,6 +62,7 @@ struct CowMapEntry<'a, K: Clone + Debug + 'static, V: Clone + Debug + 'static> {
 }
 
 impl <'a, K: Clone + Debug + 'static, V: Clone + Debug + 'static> CowMapEntry<'a, K, V> {
+    #[must_use]
     fn new(key: Cow<'a, K>, value: Cow<'a, V>) -> Self {
         CowMapEntry {key, value}
     }
@@ -104,6 +107,7 @@ impl <'a, K: Clone + Debug, V: Clone + Debug> AsRef<K> for CowMapEntry<'a, K, V>
 /// }
 /// ```
 #[derive(Clone, Debug)]
+#[must_use]
 pub struct HashTrieMap <H: Hashword, F: Flagword<H>, K: Value, V: Clone + Debug + Eq + PartialEq + Send + Sync + 'static, M: HasherBv<H, K> + 'static> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     set: HashTrie<H, F, MapEntry<K, V>, M>,
 }

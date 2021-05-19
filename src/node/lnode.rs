@@ -16,6 +16,7 @@ pub(crate) struct LNode<V: Value> {
 }
 
 impl<V: Value> LNode<V> {
+    #[must_use]
     pub(super) fn new(value: V, next: LNodeNext<V>) -> Arc<Self> {
         let size = 1 + match &next {
             LNodeNext::L(lnode) => lnode.size,
@@ -28,6 +29,7 @@ impl<V: Value> LNode<V> {
         })
     }
 
+    #[must_use]
     pub(super) fn size(&self) -> usize {
         self.size
     }

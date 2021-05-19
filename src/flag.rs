@@ -9,7 +9,8 @@ pub(crate) struct Flag <H, F> {
     pub(super) flag: F,
 }
 
-impl <H: Hashword, F: Flagword<H>> Flag<H, F> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug{
+impl <H: Hashword, F: Flagword<H>> Flag<H, F> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+    #[must_use]
     pub(crate) fn new(hash_value: H) -> Self {
         Flag {
             depth: 0,
@@ -18,18 +19,22 @@ impl <H: Hashword, F: Flagword<H>> Flag<H, F> where <F as core::convert::TryFrom
         }
     }
 
+    #[must_use]
     pub(crate) fn hash_value(&self) -> H {
         self.hash_value.clone()
     }
 
+    #[must_use]
     pub(crate) fn depth(&self) -> usize {
         self.depth
     }
 
+    #[must_use]
     pub(crate) fn flag(&self) -> F {
         self.flag.clone()
     }
 
+    #[must_use]
     pub(crate) fn next(&self) -> Option<Flag<H, F>> {
         if self.depth * F::log_b() >= 8 * mem::size_of::<H>() {
             None

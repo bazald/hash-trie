@@ -8,10 +8,12 @@ pub(crate) struct CNode <H: Hashword, F: Flagword<H>, V: Value, M: 'static> {
 }
 
 impl <H: Hashword, F: Flagword<H>, V: Value, M: 'static> CNode<H, F, V, M> {
+    #[must_use]
     pub(super) fn new(nodes: Box<dyn BitIndexedArray::<F, MNode<H, F, V, M>, usize> + 'static>) -> Self {
         Self { nodes: nodes.into() }
     }
     
+    #[must_use]
     pub(super) fn size(&self) -> usize {
         *self.nodes.extra()
     }
@@ -104,6 +106,7 @@ pub(super) fn lift_to_cnode_and_insert<'a, H: Hashword, F: Flagword<H>, V: Value
     InsertResult::InsertedC(lift_to_cnode_and_insert_recursion(this_mnode, this_flag, SNode::new(value), value_flag), None)
 }
 
+#[must_use]
 fn lift_to_cnode_and_insert_recursion<H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V>>(this: MNode<H, F, V, M>, this_flag: Flag<H, F>, snode: Arc<SNode<V>>, snode_flag: Flag<H, F>) -> CNode<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     let size = this.size() + 1;
     if this_flag.flag() == snode_flag.flag() {
