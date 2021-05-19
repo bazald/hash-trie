@@ -3,12 +3,12 @@ use super::{lnode::{self, *}, mnode::*, snode::{self, *}};
 use alloc::{boxed::Box, borrow::Cow, fmt::Debug, sync::Arc};
 
 #[derive(Debug)]
-pub(crate) struct CNode <B: Bits, V: Value, H: 'static> {
-    nodes: Arc<dyn BitIndexedArray::<B, MNode<B, V, H>, usize>>,
+pub(crate) struct CNode <H: Hashword, F: Flagword<H>, V: Value, M: 'static> {
+    nodes: Arc<dyn BitIndexedArray::<F, MNode<H, F, V, M>, usize>>,
 }
 
-impl<B: Bits, V: Value, H: 'static> CNode<B, V, H> {
-    pub(super) fn new(nodes: Box<dyn BitIndexedArray::<B, MNode<B, V, H>, usize> + 'static>) -> Self {
+impl <H: Hashword, F: Flagword<H>, V: Value, M: 'static> CNode<H, F, V, M> {
+    pub(super) fn new(nodes: Box<dyn BitIndexedArray::<F, MNode<H, F, V, M>, usize> + 'static>) -> Self {
         Self { nodes: nodes.into() }
     }
     
@@ -16,7 +16,7 @@ impl<B: Bits, V: Value, H: 'static> CNode<B, V, H> {
         *self.nodes.extra()
     }
     
-    pub(super) fn find<'a, K>(&'a self, key: &K, flag: Option<Flag<B>>) -> FindResult<'a, V> where V: PartialEq<K> {
+    pub(super) fn find<'a, K>(&'a self, key: &K, flag: Option<Flag<H, F>>) -> FindResult<'a, V> where V: PartialEq<K>, <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
         match self.nodes.at(flag.as_ref().unwrap().flag.clone()) {
             Ok(node) => match node {
                 MNode::C(cnode) => cnode.find(key, match flag {Some(flag) => flag.next(), None => None}),
@@ -27,7 +27,7 @@ impl<B: Bits, V: Value, H: 'static> CNode<B, V, H> {
         }
     }
 
-    pub(super) fn remove<'a, K>(&'a self, key: &K, flag: Option<Flag<B>>) -> RemoveResult<'a, B, V, H> where V: PartialEq<K> {
+    pub(super) fn remove<'a, K>(&'a self, key: &K, flag: Option<Flag<H, F>>) -> RemoveResult<'a, H, F, V, M> where V: PartialEq<K>, <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
         match self.nodes.at(flag.as_ref().unwrap().flag.clone()) {
             Ok(node) => match node.remove(key, flag.as_ref().unwrap().next()) {
                 RemoveResult::NotFound => RemoveResult::NotFound,
@@ -57,8 +57,8 @@ impl<B: Bits, V: Value, H: 'static> CNode<B, V, H> {
     }
 }
 
-impl <B: Bits, V: Value, H: HasherBv<B, V>> CNode<B, V, H> {
-    pub(super) fn insert<'a, K: 'static, C: AsRef<K> + Into<V>>(&'a self, value: C, flag: Option<Flag<B>>, replace: bool) -> InsertResult<'a, B, V, H> where V: PartialEq<K> {
+impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V>> CNode<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+    pub(super) fn insert<'a, K: 'static, C: AsRef<K> + Into<V>>(&'a self, value: C, flag: Option<Flag<H, F>>, replace: bool) -> InsertResult<'a, H, F, V, M> where V: PartialEq<K> {
         match self.nodes.at(flag.as_ref().unwrap().flag.clone()) {
             Ok(node) => match node {
                 MNode::C(cnode) => match cnode.insert(value, flag.as_ref().unwrap().next(), replace) {
@@ -85,7 +85,7 @@ impl <B: Bits, V: Value, H: HasherBv<B, V>> CNode<B, V, H> {
     }
 }
 
-pub(super) fn lift_to_cnode_and_insert<'a, B: Bits, V: Value, H: HasherBv<B, V>>(this: LNodeNext::<V>, this_hash: B, value: V, value_flag: Option<Flag<B>>) -> InsertResult<'a, B, V, H> {
+pub(super) fn lift_to_cnode_and_insert<'a, H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V>>(this: LNodeNext::<V>, this_hash: H, value: V, value_flag: Option<Flag<H, F>>) -> InsertResult<'a, H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     if value_flag.as_ref().unwrap().hash_value() == this_hash {
         return InsertResult::InsertedL(LNode::new(value, this), None);
     }
@@ -104,7 +104,7 @@ pub(super) fn lift_to_cnode_and_insert<'a, B: Bits, V: Value, H: HasherBv<B, V>>
     InsertResult::InsertedC(lift_to_cnode_and_insert_recursion(this_mnode, this_flag, SNode::new(value), value_flag), None)
 }
 
-fn lift_to_cnode_and_insert_recursion<B: Bits, V: Value, H: HasherBv<B, V>>(this: MNode<B, V, H>, this_flag: Flag<B>, snode: Arc<SNode<V>>, snode_flag: Flag<B>) -> CNode<B, V, H> {
+fn lift_to_cnode_and_insert_recursion<H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V>>(this: MNode<H, F, V, M>, this_flag: Flag<H, F>, snode: Arc<SNode<V>>, snode_flag: Flag<H, F>) -> CNode<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     let size = this.size() + 1;
     if this_flag.flag() == snode_flag.flag() {
         CNode::new(new_bit_indexed_array(this_flag.flag(), BitIndexedArrayVec::new(&[MNode::C(lift_to_cnode_and_insert_recursion(this, this_flag.next().unwrap(), snode, snode_flag.next().unwrap()))]), size).unwrap())
@@ -120,7 +120,7 @@ fn lift_to_cnode_and_insert_recursion<B: Bits, V: Value, H: HasherBv<B, V>>(this
     }
 }
 
-impl<B: Bits, V: Value, H: 'static> Clone for CNode<B, V, H> {
+impl <H: Hashword, F: Flagword<H>, V: Value, M: 'static> Clone for CNode<H, F, V, M> {
     fn clone(&self) -> Self {
         Self {
             nodes: self.nodes.clone()
@@ -128,8 +128,8 @@ impl<B: Bits, V: Value, H: 'static> Clone for CNode<B, V, H> {
     }
 }
 
-impl<B: Bits, V: Value, H: 'static> Default for CNode<B, V, H> {
+impl <H: Hashword, F: Flagword<H>, V: Value, M: 'static> Default for CNode<H, F, V, M> {
     fn default() -> Self {
-        CNode::<B, V, H>::new(default_bit_indexed_array())
+        CNode::<H, F, V, M>::new(default_bit_indexed_array())
     }
 }

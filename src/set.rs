@@ -85,15 +85,15 @@ impl <V> HashLike<SetEntry<V>> for V {}
 /// }
 /// ```
 #[derive(Clone, Debug)]
-pub struct HashTrieSet <B: Bits, V: Value, H: HasherBv<B, V>> {
-    set: HashTrie<B, SetEntry<V>, H>,
+pub struct HashTrieSet <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+    set: HashTrie<H, F, SetEntry<V>, M>,
 }
 
-impl <B: Bits, V: Value, H: HasherBv<B, V>> HashTrieSet<B, V, H> {
+impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> HashTrieSet<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     /// Get a new, empty HashTrieSet.
     pub fn new() -> Self {
         Self {
-            set: HashTrie::<B, SetEntry<V>, H>::new()
+            set: HashTrie::<H, F, SetEntry<V>, M>::new()
         }
     }
 
@@ -114,7 +114,7 @@ impl <B: Bits, V: Value, H: HasherBv<B, V>> HashTrieSet<B, V, H> {
     }
 }
 
-impl <B: Bits, V: Value, H: HasherBv<B, V>> Default for HashTrieSet<B, V, H> {
+impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> Default for HashTrieSet<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     fn default() -> Self {
         Self::new()
     }

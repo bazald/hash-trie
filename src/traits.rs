@@ -1,5 +1,5 @@
 use alloc::fmt::Debug;
-use core::{hash::{Hash, Hasher}, mem, ops::*};
+use core::{convert::{TryFrom, TryInto}, hash::{Hash, Hasher}, mem, ops::*};
 
 /// `BitError` enumerates possible error conditions when bitops are used "incorrectly."
 #[derive(Debug)]
@@ -156,19 +156,19 @@ impl LogB for usize {
 }
 
 /// `MaskLogB` provides a mask of 1s equal to the log_2 of the word size.
-pub trait MaskLogB {
+pub trait MaskLogB<T> {
     /// Get the mask, length log_2 of the word size.
     /// 
     /// e.g. `u32::mask_log_b() == 0b11111`
-    fn mask_log_b() -> Self;
+    fn mask_log_b() -> T;
 }
-impl MaskLogB for u8 { fn mask_log_b() -> Self {0b111} }
-impl MaskLogB for u16 { fn mask_log_b() -> Self {0b1111} }
-impl MaskLogB for u32 { fn mask_log_b() -> Self {0b11111} }
-impl MaskLogB for u64 { fn mask_log_b() -> Self {0b111111} }
-impl MaskLogB for u128 { fn mask_log_b() -> Self {0b1111111} }
-impl MaskLogB for usize {
-    fn mask_log_b() -> usize {
+impl <T: From<u8>> MaskLogB<T> for u8 { fn mask_log_b() -> T {0b111.into()} }
+impl <T: From<u8>> MaskLogB<T> for u16 { fn mask_log_b() -> T {0b1111.into()} }
+impl <T: From<u16>> MaskLogB<T> for u32 { fn mask_log_b() -> T {0b11111.into()} }
+impl <T: From<u16>> MaskLogB<T> for u64 { fn mask_log_b() -> T {0b111111.into()} }
+impl <T: From<u16>> MaskLogB<T> for u128 { fn mask_log_b() -> T {0b1111111.into()} }
+impl <T: From<u16>> MaskLogB<T> for usize {
+    fn mask_log_b() -> T {
         match mem::size_of::<usize>() {
             1 => 0b111,
             2 => 0b1111,
@@ -176,7 +176,7 @@ impl MaskLogB for usize {
             8 => 0b111111,
             16 => 0b1111111,
             _ => panic!()
-        }
+        }.into()
     }
 }
 
@@ -194,10 +194,13 @@ impl NthBit for u64 { fn nth_bit(n: usize) -> Result<Self, BitError> {bit_in_ran
 impl NthBit for u128 { fn nth_bit(n: usize) -> Result<Self, BitError> {bit_in_range!(u128, n); Ok(1_u128 << n)} }
 impl NthBit for usize { fn nth_bit(n: usize) -> Result<Self, BitError> {bit_in_range!(usize, n); Ok(1_usize << n)} }
 
-/// `Bits` lists the requirements on the hash value for the hash array mapped trie to function.
-pub trait Bits: AsUsize + BitAnd + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Debug + Default + From<<Self as BitAnd>::Output> + From<<Self as Shr<usize>>::Output> + LogB + MaskLogB + NthBit + PartialEq + Shr<usize> + Send + Sync + 'static {}
-impl <B: AsUsize + BitAnd + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Debug + Default + From<<Self as BitAnd>::Output> + From<<Self as Shr<usize>>::Output> + LogB + MaskLogB + NthBit + PartialEq + Shr<usize> + Send + Sync + 'static> Bits
-for B where B: AsUsize + BitAnd + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Debug + Default + From<<Self as BitAnd>::Output> + From<<Self as Shr<usize>>::Output> + LogB + MaskLogB + NthBit + PartialEq + Shr<usize> + Send + Sync + 'static {}
+pub trait Hashword: BitAnd + Clone + From<<Self as Shr<usize>>::Output> + PartialEq + Shr<usize> + 'static {}
+impl <H: BitAnd + Clone + From<<Self as Shr<usize>>::Output> + PartialEq + Shr<usize>> Hashword
+for H where H: BitAnd + Clone + From<<Self as Shr<usize>>::Output> + PartialEq + Shr<usize> + 'static {}
+
+pub trait Flagword<H: Hashword>: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + NthBit + PartialEq + 'static {}
+impl <H: Hashword, F: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + NthBit + PartialEq> Flagword<H>
+for F where F: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + NthBit + PartialEq + 'static {}
 
 /// `Value` lists the requirements on the value type for the hash array mapped trie to function.
 pub trait Value: Clone + Debug + Eq + PartialEq + Hash + Send + Sync + 'static {}
@@ -218,7 +221,7 @@ macro_rules! hasher_bv_impl {
             fn hash(&self, value: &V) -> $type {
                 let mut hasher = H::default();
                 value.hash(&mut hasher);
-                hasher.finish() as $type
+                hasher.finish().try_into().unwrap()
             }
         }
     };

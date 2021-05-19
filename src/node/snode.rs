@@ -21,7 +21,7 @@ impl <V: Value> SNode<V> {
         }
     }
     
-    pub(super) fn remove<'a, B: Bits, K, H: 'static>(&'a self, key: &K) -> RemoveResult<'a, B, V, H> where V: PartialEq<K> {
+    pub(super) fn remove<'a, H: Hashword, F: Flagword<H>, M: 'static, K>(&'a self, key: &K) -> RemoveResult<'a, H, F, V, M> where V: PartialEq<K> {
         if self.value == *key {
             RemoveResult::RemovedZ(&self.value)
         }
@@ -40,7 +40,7 @@ impl <V: Value> SNode<V> {
     }
 }
 
-pub(super) fn insert<'a, B: Bits, K: 'static, V: Value, C: AsRef<K> + Into<V>, H: HasherBv<B, V>>(this: &'a Arc<SNode<V>>, value: C, value_flag: Option<Flag<B>>, replace: bool) -> InsertResult<'a, B, V, H> where V: PartialEq<K> {
+pub(super) fn insert<'a, H: Hashword, F: Flagword<H>, K: 'static, V: Value, C: AsRef<K> + Into<V>, M: HasherBv<H, V>>(this: &'a Arc<SNode<V>>, value: C, value_flag: Option<Flag<H, F>>, replace: bool) -> InsertResult<'a, H, F, V, M> where V: PartialEq<K>, <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     if this.value == *value.as_ref() {
         if replace {
             InsertResult::InsertedS(this.clone(), Some(&this.value))
@@ -50,6 +50,6 @@ pub(super) fn insert<'a, B: Bits, K: 'static, V: Value, C: AsRef<K> + Into<V>, H
         }
     }
     else {
-        lift_to_cnode_and_insert(LNodeNext::S(this.clone()), H::default().hash(&this.value), value.into(), value_flag)
+        lift_to_cnode_and_insert(LNodeNext::S(this.clone()), M::default().hash(&this.value), value.into(), value_flag)
     }
 }

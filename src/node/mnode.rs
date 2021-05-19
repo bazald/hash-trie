@@ -3,13 +3,13 @@ use super::{cnode::*, lnode::{self, LNode}, snode::{self, SNode}};
 use alloc::{fmt::Debug, sync::Arc};
 
 #[derive(Debug)]
-pub(crate) enum MNode <B: Bits, V: Value, H: 'static> {
-    C(CNode<B, V, H>),
+pub(crate) enum MNode <H: Hashword, F: Flagword<H>, V: Value, M: 'static> {
+    C(CNode<H, F, V, M>),
     L(Arc<LNode<V>>),
     S(Arc<SNode<V>>),
 }
 
-impl <B: Bits, V: Value, H: 'static> MNode<B, V, H> {
+impl <H: Hashword, F: Flagword<H>, V: Value, M: 'static> MNode<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     pub(super) fn size(&self) -> usize {
         match self {
             Self::C(cnode) => cnode.size(),
@@ -18,7 +18,7 @@ impl <B: Bits, V: Value, H: 'static> MNode<B, V, H> {
         }
     }
 
-    pub(crate) fn find<'a, K>(&'a self, key: &K, flag: Option<Flag<B>>) -> FindResult<'a, V> where V: PartialEq<K> {
+    pub(crate) fn find<'a, K>(&'a self, key: &K, flag: Option<Flag<H, F>>) -> FindResult<'a, V> where V: PartialEq<K> {
         match self {
             Self::C(cnode) => cnode.find(key, flag),
             Self::L(lnode) => lnode.find(key),
@@ -26,7 +26,7 @@ impl <B: Bits, V: Value, H: 'static> MNode<B, V, H> {
         }
     }
     
-    pub(crate) fn remove<'a, K>(&'a self, key: &K, flag: Option<Flag<B>>) -> RemoveResult<'a, B, V, H> where V: PartialEq<K> {
+    pub(crate) fn remove<'a, K>(&'a self, key: &K, flag: Option<Flag<H, F>>) -> RemoveResult<'a, H, F, V, M> where V: PartialEq<K> {
         match self {
             Self::C(cnode) => cnode.remove(key, flag),
             Self::L(lnode) => lnode.remove(key),
@@ -35,8 +35,8 @@ impl <B: Bits, V: Value, H: 'static> MNode<B, V, H> {
     }
 }
 
-impl <B: Bits, V: Value, H: HasherBv<B, V>> MNode<B, V, H> {
-    pub(crate) fn insert<'a, K: 'static, C: AsRef<K> + Into<V>>(&'a self, value: C, flag: Option<Flag<B>>, replace: bool) -> InsertResult<'a, B, V, H> where V: PartialEq<K> {
+impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> MNode<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+    pub(crate) fn insert<'a, K: 'static, C: AsRef<K> + Into<V>>(&'a self, value: C, flag: Option<Flag<H, F>>, replace: bool) -> InsertResult<'a, H, F, V, M> where V: PartialEq<K> {
         match self {
             Self::C(cnode) => cnode.insert(value, flag, replace),
             Self::L(lnode) => lnode::insert(&lnode, value, flag, replace),
@@ -45,7 +45,7 @@ impl <B: Bits, V: Value, H: HasherBv<B, V>> MNode<B, V, H> {
     }
 }
 
-impl <B: Bits, V: Value, H: 'static> Clone for MNode<B, V, H> {
+impl <H: Hashword, F: Flagword<H>, V: Value, M: 'static> Clone for MNode<H, F, V, M> {
     fn clone(&self) -> Self {
         match self {
             Self::C(this) => Self::C((*this).clone()),
@@ -55,8 +55,8 @@ impl <B: Bits, V: Value, H: 'static> Clone for MNode<B, V, H> {
     }
 }
 
-impl <B: Bits, V: Value, H: 'static> Default for MNode<B, V, H> {
+impl <H: Hashword, F: Flagword<H>, V: Value, M: 'static> Default for MNode<H, F, V, M> {
     fn default() -> Self {
-        Self::C(CNode::<B, V, H>::default())
+        Self::C(CNode::<H, F, V, M>::default())
     }
 }

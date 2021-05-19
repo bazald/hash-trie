@@ -6,16 +6,16 @@ pub(crate) enum FindResult<'a, V: Value> {
     Found(&'a V),
 }
 
-pub(crate) enum InsertResult<'a, B: Bits, V: Value, H: 'static> {
+pub(crate) enum InsertResult<'a, H: Hashword, F: Flagword<H>, V: Value, M: 'static> {
     Found(&'a V),
-    InsertedC(CNode<B, V, H>, Option<&'a V>),
+    InsertedC(CNode<H, F, V, M>, Option<&'a V>),
     InsertedL(Arc<LNode<V>>, Option<&'a V>),
     InsertedS(Arc<SNode<V>>, Option<&'a V>),
 }
 
-pub(crate) enum RemoveResult<'a, B: Bits, V: Value, H: 'static> {
+pub(crate) enum RemoveResult<'a, H: Hashword, F: Flagword<H>, V: Value, M: 'static> {
     NotFound,
-    RemovedC(CNode<B, V, H>, &'a V),
+    RemovedC(CNode<H, F, V, M>, &'a V),
     RemovedL(Arc<LNode<V>>, &'a V),
     RemovedS(Arc<SNode<V>>, &'a V),
     RemovedZ(&'a V),

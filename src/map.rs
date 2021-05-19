@@ -104,15 +104,15 @@ impl <'a, K: Clone + Debug, V: Clone + Debug> AsRef<K> for CowMapEntry<'a, K, V>
 /// }
 /// ```
 #[derive(Clone, Debug)]
-pub struct HashTrieMap <B: Bits, K: Value, V: Clone + Debug + Eq + PartialEq + Send + Sync + 'static, H: HasherBv<B, K>> {
-    set: HashTrie<B, MapEntry<K, V>, H>,
+pub struct HashTrieMap <H: Hashword, F: Flagword<H>, K: Value, V: Clone + Debug + Eq + PartialEq + Send + Sync + 'static, M: HasherBv<H, K> + 'static> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+    set: HashTrie<H, F, MapEntry<K, V>, M>,
 }
 
-impl <B: Bits, K: Value, V: Clone + Debug + Eq + PartialEq + Send + Sync + 'static, H: HasherBv<B, K>> HashTrieMap<B, K, V, H> {
+impl <H: Hashword, F: Flagword<H>, K: Value, V: Clone + Debug + Eq + PartialEq + Send + Sync + 'static, M: HasherBv<H, K> + 'static> HashTrieMap<H, F, K, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     /// Get a new, empty HashTrieMap.
     pub fn new() -> Self {
         Self {
-            set: HashTrie::<B, MapEntry<K, V>, H>::new()
+            set: HashTrie::<H, F, MapEntry<K, V>, M>::new()
         }
     }
 
@@ -134,7 +134,7 @@ impl <B: Bits, K: Value, V: Clone + Debug + Eq + PartialEq + Send + Sync + 'stat
     }
 }
 
-impl <B: Bits, K: Value, V: Clone + Debug + Eq + PartialEq + Send + Sync + 'static, H: HasherBv<B, K>> Default for HashTrieMap<B, K, V, H> {
+impl <H: Hashword, F: Flagword<H>, K: Value, V: Clone + Debug + Eq + PartialEq + Send + Sync + 'static, M: HasherBv<H, K> + 'static> Default for HashTrieMap<H, F, K, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     fn default() -> Self {
         Self::new()
     }
