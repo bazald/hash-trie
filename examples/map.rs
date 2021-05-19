@@ -1,10 +1,12 @@
 use hash_trie::HashTrieMap;
+use im::HashMap as ImHashMap;
 use std::{borrow::Cow, collections::{hash_map::DefaultHasher, hash_map::HashMap}, time::SystemTime, vec::Vec};
 use rand::{Rng, seq::SliceRandom};
 
 fn main() {
     println!("HashMap: {} µs", hash_map());
     println!("HashMapInc: {} µs", hash_map_inc());
+    println!("ImHashMap: {} µs", im_hash_map());
     println!("HashTrieMap: {} µs", hash_trie_map());
 }
 
@@ -71,6 +73,39 @@ fn hash_map_inc() -> u128 {
     let t3 = SystemTime::now();
 
     println!("HashMapInc insertions: {} µs\r\nHashMapInc searches: {} µs\r\nHashMapInc removals: {} µs",
+        t1.duration_since(t0).unwrap().as_micros(),
+        t2.duration_since(t1).unwrap().as_micros(),
+        t3.duration_since(t2).unwrap().as_micros());
+
+    t3.duration_since(t0).unwrap().as_micros()
+}
+
+fn im_hash_map() -> u128 {
+    let (insertions, searches, removals) = get_values();
+
+    let mut hash_map = ImHashMap::new();
+
+    let t0 = SystemTime::now();
+
+    for v in insertions {
+        hash_map = hash_map.update(v, 0x42);
+    }
+
+    let t1 = SystemTime::now();
+
+    for v in searches {
+        let _ = hash_map.get(&v);
+    }
+
+    let t2 = SystemTime::now();
+
+    for v in removals {
+        hash_map = hash_map.without(&v);
+    }
+    
+    let t3 = SystemTime::now();
+
+    println!("ImHashMap insertions: {} µs\r\nImHashMap searches: {} µs\r\nImHashMap removals: {} µs",
         t1.duration_since(t0).unwrap().as_micros(),
         t2.duration_since(t1).unwrap().as_micros(),
         t3.duration_since(t2).unwrap().as_micros());

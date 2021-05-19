@@ -10,6 +10,7 @@ license = "MPL-2.0"
 keywords = ["memory", "concurrency", "performance", "immutable", "generic"]
 
 [dev-dependencies]
+im = "15.0.0"
 rand = "0.8.3"
 
 [features]
