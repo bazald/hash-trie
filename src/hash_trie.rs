@@ -48,6 +48,27 @@ impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> HashTr
             RemoveResult::RemovedZ(removed) => Ok((Self::default(), removed))
         }
     }
+    
+    pub(crate) fn visit<Op: Clone>(&self, op: Op) where Op: Fn(&'_ V) {
+        self.root.visit(op);
+    }
+
+    pub(crate) fn transform<ReduceT, ReduceOp, Op>
+        (&self, reduce_op: ReduceOp, op: Op) -> (Self, ReduceT)
+        where
+        Self: Sized,
+        ReduceT: Default,
+        ReduceOp: Fn(ReduceT, ReduceT) -> ReduceT + Clone,
+        Op: Fn(&V) -> (Option<V>, ReduceT) + Clone
+    {
+        match self.root.transform(reduce_op, op) {
+            TransformResult::C(cnode, reduced) => (Self::singleton(MNode::C(cnode)), reduced),
+            TransformResult::L(lnode, reduced) => (Self::singleton(MNode::L(lnode)), reduced),
+            TransformResult::S(snode, reduced) => (Self::singleton(MNode::S(snode)), reduced),
+            TransformResult::Z(reduced) => (Self::default(), reduced),
+        }
+    }
+
 }
 
 impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> Clone for HashTrie<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {

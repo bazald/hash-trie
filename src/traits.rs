@@ -30,7 +30,7 @@ macro_rules! bit_not_found {
 
 macro_rules! bit_in_range {
     ( $type:ty, $index:expr) => {
-        if $index >= 8 * mem::size_of::<$type>() {
+        if $index >= <$type>::max_ones() {
             return Err(BitError::Range);
         }
     };
@@ -172,6 +172,21 @@ impl <T: From<u16>> MaskLogB<T> for usize {
     }
 }
 
+/// `MaxOnes` provides a count of the number of bits that can be stored for a given type
+pub trait MaxOnes {
+    /// Get the maximum number of bits that can be set to 1.
+    /// 
+    /// e.g. `u32::max_ones() == 32`
+    #[must_use]
+    fn max_ones() -> usize;
+}
+impl MaxOnes for u8 { fn max_ones() -> usize {8} }
+impl MaxOnes for u16 { fn max_ones() -> usize {16} }
+impl MaxOnes for u32 { fn max_ones() -> usize {32} }
+impl MaxOnes for u64 { fn max_ones() -> usize {64} }
+impl MaxOnes for u128 { fn max_ones() -> usize {128} }
+impl MaxOnes for usize { fn max_ones() -> usize {8 * mem::size_of::<usize>()} }
+
 /// `NthBit` provides a word with only the nth bit set to 1.
 pub trait NthBit {
     /// Get the nth bit of the given word size.
@@ -187,14 +202,14 @@ impl NthBit for u128 { fn nth_bit(n: usize) -> Result<Self, BitError> {bit_in_ra
 impl NthBit for usize { fn nth_bit(n: usize) -> Result<Self, BitError> {bit_in_range!(usize, n); Ok(1_usize << n)} }
 
 /// `Hashword` lists the requirements on hash values.
-pub trait Hashword: BitAnd + Clone + From<<Self as Shr<usize>>::Output> + PartialEq + Shr<usize> + 'static {}
-impl <H: BitAnd + Clone + From<<Self as Shr<usize>>::Output> + PartialEq + Shr<usize>> Hashword
-for H where H: BitAnd + Clone + From<<Self as Shr<usize>>::Output> + PartialEq + Shr<usize> + 'static {}
+pub trait Hashword: BitAnd + Clone + From<<Self as Shr<usize>>::Output> + MaxOnes + PartialEq + Shr<usize> + 'static {}
+impl <H: BitAnd + Clone + From<<Self as Shr<usize>>::Output> + MaxOnes + PartialEq + Shr<usize>> Hashword
+for H where H: BitAnd + Clone + From<<Self as Shr<usize>>::Output> + MaxOnes + PartialEq + Shr<usize> + 'static {}
 
 /// `Flagword` lists the requirements on CNode indices.
-pub trait Flagword<H: Hashword>: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + NthBit + PartialEq + 'static {}
-impl <H: Hashword, F: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + NthBit + PartialEq> Flagword<H>
-for F where F: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + NthBit + PartialEq + 'static {}
+pub trait Flagword<H: Hashword>: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + MaxOnes + NthBit + PartialEq + 'static {}
+impl <H: Hashword, F: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + MaxOnes + NthBit + PartialEq> Flagword<H>
+for F where F: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + MaxOnes + NthBit + PartialEq + 'static {}
 
 /// `Value` lists the requirements on the value type for the hash array mapped trie to function.
 pub trait Value: Clone + Debug + Eq + PartialEq + Hash + Send + Sync + 'static {}

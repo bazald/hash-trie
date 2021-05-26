@@ -1,6 +1,5 @@
 use crate::traits::*;
 use alloc::fmt::Debug;
-use core::mem;
 
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct Flag <H, F> {
@@ -36,7 +35,7 @@ impl <H: Hashword, F: Flagword<H>> Flag<H, F> where <F as core::convert::TryFrom
 
     #[must_use]
     pub(crate) fn next(&self) -> Option<Flag<H, F>> {
-        if self.depth * F::log_b() >= 8 * mem::size_of::<H>() {
+        if self.depth * F::log_b() >= 8 * <H>::max_ones() {
             None
         }
         else {

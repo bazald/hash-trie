@@ -1,6 +1,6 @@
 use crate::{bit_indexed_array::*, flag::*, result::*, traits::*};
 use super::{lnode::{self, *}, mnode::*, snode::{self, *}};
-use alloc::{boxed::Box, borrow::Cow, fmt::Debug, sync::Arc};
+use alloc::{boxed::Box, borrow::Cow, fmt::Debug, sync::Arc, vec::Vec};
 
 #[derive(Debug)]
 pub(crate) struct CNode <H: Hashword, F: Flagword<H>, V: Value, M: 'static> {
@@ -57,6 +57,69 @@ impl <H: Hashword, F: Flagword<H>, V: Value, M: 'static> CNode<H, F, V, M> {
             Err(_) => RemoveResult::NotFound
         }
     }
+    
+    pub(super) fn visit<Op: Clone>(&self, op: Op) where Op: Fn(&'_ V) {
+        for node in self.nodes.as_ref() {
+            match node {
+                MNode::C(cnode) => cnode.visit(op.clone()),
+                MNode::L(lnode) => lnode.visit(op.clone()),
+                MNode::S(snode) => snode.visit(op.clone()),
+            }
+        }
+    }
+
+    pub(super) fn transform<ReduceT, ReduceOp, Op>
+        (&self, reduce_op: ReduceOp, op: Op) -> TransformResult<H, F, V, M, ReduceT>
+        where
+        Self: Sized,
+        ReduceT: Default,
+        ReduceOp: Fn(ReduceT, ReduceT) -> ReduceT + Clone,
+        Op: Fn(&V) -> (Option<V>, ReduceT) + Clone,
+        <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
+    {
+        
+        let mut size = 0;
+        let mut bits_t = F::default();
+        let mut values_t = Vec::default();
+        let mut reduced = ReduceT::default();
+
+        for index in 0..<F>::max_ones() {
+            if let Ok(node) = self.nodes.at_index(index) {
+                match node.transform(reduce_op.clone(), op.clone()) {
+                    TransformResult::C(cnode, r) => {
+                        size += cnode.size();
+                        bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
+                        values_t.push(MNode::C(cnode));
+                        reduced = reduce_op(reduced, r);
+                    },
+                    TransformResult::L(lnode, r) => {
+                        size += lnode.size();
+                        bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
+                        values_t.push(MNode::L(lnode));
+                        reduced = reduce_op(reduced, r);
+                    },
+                    TransformResult::S(snode, r) => {
+                        size += 1;
+                        bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
+                        values_t.push(MNode::S(snode));
+                        reduced = reduce_op(reduced, r);
+                    },
+                    TransformResult::Z(r) => reduced = reduce_op(reduced, r),
+                }
+            }
+        }
+
+        match values_t.len() {
+            0 => TransformResult::Z(reduced),
+            1 => match values_t.pop().unwrap() {
+                MNode::C(cnode) => TransformResult::C(Self::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+                MNode::L(lnode) => TransformResult::L(lnode, reduced),
+                MNode::S(snode) => TransformResult::S(snode, reduced),
+            },
+            _ => TransformResult::C(Self::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+        }
+    }
+
 }
 
 impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V>> CNode<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {

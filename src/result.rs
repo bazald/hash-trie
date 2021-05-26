@@ -51,6 +51,27 @@ pub(crate) enum SNodeRemoveResult<'a, V: Value> {
     RemovedZ(&'a V),
 }
 
+#[must_use]
+pub(crate) enum TransformResult<H: Hashword, F: Flagword<H>, V: Value, M: 'static, ReduceT> {
+    C(CNode<H, F, V, M>, ReduceT),
+    L(Arc<LNode<V>>, ReduceT),
+    S(Arc<SNode<V>>, ReduceT),
+    Z(ReduceT),
+}
+
+#[must_use]
+pub(crate) enum LNodeTransformResult<V: Value, ReduceT> {
+    L(Arc<LNode<V>>, ReduceT),
+    S(Arc<SNode<V>>, ReduceT),
+    Z(ReduceT),
+}
+
+#[must_use]
+pub(crate) enum SNodeTransformResult<V: Value, ReduceT> {
+    S(Arc<SNode<V>>, ReduceT),
+    Z(ReduceT),
+}
+
 #[cfg(test)]
 macro_rules! assert_found_eq {
     ( $found:expr, $expected:expr ) => {

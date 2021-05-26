@@ -75,6 +75,46 @@ impl<V: Value> LNode<V> {
             }
         }
     }
+    
+    pub(super) fn visit<Op>(&self, op: Op) where Op: Fn(&'_ V) {
+        op(&self.value);
+        match &self.next {
+            LNodeNext::L(lnode) => lnode.visit(op),
+            LNodeNext::S(snode) => snode.visit(op),
+        }
+    }
+
+    pub(super) fn transform<ReduceT, ReduceOp, Op>
+        (&self, reduce_op: ReduceOp, op: Op) -> LNodeTransformResult<V, ReduceT>
+        where
+        Self: Sized,
+        ReduceT: Default,
+        ReduceOp: Fn(ReduceT, ReduceT) -> ReduceT + Clone,
+        Op: Fn(&V) -> (Option<V>, ReduceT) + Clone
+    {
+        let next = match &self.next {
+            LNodeNext::L(lnode) => lnode.transform(reduce_op.clone(), op.clone()),
+            LNodeNext::S(snode) => match snode.transform(op.clone()) {
+                SNodeTransformResult::S(snode, r) => LNodeTransformResult::S(snode, r),
+                SNodeTransformResult::Z(r) => LNodeTransformResult::Z(r),
+            },
+        };
+
+        let (v, r) = op(&self.value);
+        match v {
+            Some(v) => match next {
+                LNodeTransformResult::L(lnode, rn) => LNodeTransformResult::L(LNode::new(v, LNodeNext::L(lnode)), reduce_op(r, rn)),
+                LNodeTransformResult::S(snode, rn) => LNodeTransformResult::L(LNode::new(v, LNodeNext::S(snode)), reduce_op(r, rn)),
+                LNodeTransformResult::Z(rn) => LNodeTransformResult::S(SNode::new(v), reduce_op(r, rn)),
+            },
+            None => match next {
+                LNodeTransformResult::L(lnode, rn) => LNodeTransformResult::L(lnode, reduce_op(r, rn)),
+                LNodeTransformResult::S(snode, rn) => LNodeTransformResult::S(snode, reduce_op(r, rn)),
+                LNodeTransformResult::Z(rn) => LNodeTransformResult::Z(reduce_op(r, rn)),
+            },
+        }
+    }
+
 }
 
 pub(super) fn insert<'a, H: Hashword, F: Flagword<H>, K: 'static, V: Value, C: AsRef<K> + Into<V>, M: HasherBv<H, V>>(this: &'a Arc<LNode<V>>, value: C, value_flag: Option<Flag<H, F>>, replace: bool) -> InsertResult<'a, H, F, V, M> where V: PartialEq<K>, <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {

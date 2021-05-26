@@ -39,6 +39,25 @@ impl <V: Value> SNode<V> {
             SNodeRemoveResult::NotFound
         }
     }
+
+    pub(super) fn visit<Op>(&self, op: Op) where Op: Fn(&'_ V) {
+        op(&self.value);
+    }
+
+    pub(super) fn transform<ReduceT, Op>
+        (&self, op: Op) -> SNodeTransformResult<V, ReduceT>
+        where
+        Self: Sized,
+        ReduceT: Default,
+        Op: Fn(&V) -> (Option<V>, ReduceT)
+    {
+        let (v, r) = op(&self.value);
+        match v {
+            Some(v) => SNodeTransformResult::S(Self::new(v), r),
+            None => SNodeTransformResult::Z(r),
+        }
+    }
+
 }
 
 pub(super) fn insert<'a, H: Hashword, F: Flagword<H>, K: 'static, V: Value, C: AsRef<K> + Into<V>, M: HasherBv<H, V>>(this: &'a Arc<SNode<V>>, value: C, value_flag: Option<Flag<H, F>>, replace: bool) -> InsertResult<'a, H, F, V, M> where V: PartialEq<K>, <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
