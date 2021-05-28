@@ -19,13 +19,10 @@ mod set;
 pub mod traits;
 
 pub use result::BitError as BitError;
+pub use result::HashTrieError as HashTrieError;
 
-/// The only error you'll find is `NotFound`.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum HashTrieError {
-    /// The value was not found.
-    NotFound,
-}
+pub use result::SetTransformResult as SetTransformResult;
+pub use result::MapTransformResult as MapTransformResult;
 
 pub use set::HashTrieSet as HashTrieSet;
 pub use map::HashTrieMap as HashTrieMap;

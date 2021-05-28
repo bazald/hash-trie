@@ -15,6 +15,13 @@ pub enum BitError {
     Range,
 }
 
+/// The only error you'll find is `NotFound`.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum HashTrieError {
+    /// The value was not found.
+    NotFound,
+}
+
 #[must_use]
 pub(crate) enum FindResult<'a, V: Value> {
     NotFound,
@@ -51,25 +58,48 @@ pub(crate) enum SNodeRemoveResult<'a, V: Value> {
     RemovedZ(&'a V),
 }
 
+/// MapTransformResult is the result of a transform operation on a single entry of a map.
 #[must_use]
-pub(crate) enum TransformResult<H: Hashword, F: Flagword<H>, V: Value, M: 'static, ReduceT> {
+pub enum MapTransformResult<V> {
+    /// The key-value pair was untouched.
+    Unchanged,
+    /// The value was changed.
+    Changed(V),
+    /// The key-value pair was removed.
+    Removed,
+}
+
+/// SetTransformResult is the result of a transform operation on a single entry of a set.
+#[must_use]
+pub enum SetTransformResult {
+    /// The value was untouched.
+    Unchanged,
+    /// The value was removed.
+    Removed,
+}
+
+#[must_use]
+pub(crate) enum MNodeTransformResult<H: Hashword, F: Flagword<H>, V: Value, M: 'static, ReduceT> {
+    Unchanged(ReduceT),
     C(CNode<H, F, V, M>, ReduceT),
     L(Arc<LNode<V>>, ReduceT),
     S(Arc<SNode<V>>, ReduceT),
-    Z(ReduceT),
+    Removed(ReduceT),
 }
 
 #[must_use]
 pub(crate) enum LNodeTransformResult<V: Value, ReduceT> {
+    Unchanged(ReduceT),
     L(Arc<LNode<V>>, ReduceT),
     S(Arc<SNode<V>>, ReduceT),
-    Z(ReduceT),
+    Removed(ReduceT),
 }
 
 #[must_use]
 pub(crate) enum SNodeTransformResult<V: Value, ReduceT> {
+    Unchanged(ReduceT),
     S(Arc<SNode<V>>, ReduceT),
-    Z(ReduceT),
+    Removed(ReduceT),
 }
 
 #[cfg(test)]

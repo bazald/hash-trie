@@ -40,22 +40,8 @@ impl <V: Value> SNode<V> {
         }
     }
 
-    pub(super) fn visit<Op>(&self, op: Op) where Op: Fn(&'_ V) {
+    pub(super) fn visit<Op>(&self, op: Op) where Op: Fn(&V) {
         op(&self.value);
-    }
-
-    pub(super) fn transform<ReduceT, Op>
-        (&self, op: Op) -> SNodeTransformResult<V, ReduceT>
-        where
-        Self: Sized,
-        ReduceT: Default,
-        Op: Fn(&V) -> (Option<V>, ReduceT)
-    {
-        let (v, r) = op(&self.value);
-        match v {
-            Some(v) => SNodeTransformResult::S(Self::new(v), r),
-            None => SNodeTransformResult::Z(r),
-        }
     }
 
 }
@@ -71,5 +57,18 @@ pub(super) fn insert<'a, H: Hashword, F: Flagword<H>, K: 'static, V: Value, C: A
     }
     else {
         lift_to_cnode_and_insert(LNodeNext::S(this.clone()), M::default().hash(&this.value), value.into(), value_flag)
+    }
+}
+
+pub(super) fn transform<V: Value, ReduceT, Op>(this: &Arc<SNode<V>>, op: Op) -> SNodeTransformResult<V, ReduceT>
+    where
+    ReduceT: Default,
+    Op: Fn(&V) -> (MapTransformResult<V>, ReduceT)
+{
+    let (t, r) = op(&this.value);
+    match t {
+        MapTransformResult::Unchanged => SNodeTransformResult::Unchanged(r),
+        MapTransformResult::Changed(v) => SNodeTransformResult::S(SNode::new(v), r),
+        MapTransformResult::Removed => SNodeTransformResult::Removed(r),
     }
 }

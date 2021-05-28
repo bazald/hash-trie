@@ -22,6 +22,10 @@ impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> HashTr
         }
     }
 
+    pub(crate) fn size(&self) -> usize {
+        self.root.size()
+    }
+
     pub(crate) fn find<K: Hash + HashLike<V>>(&self, key: &K) -> Result<&V, HashTrieError> where V: PartialEq<K>, M: HasherBv<H, K>, <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
         match self.root.find(key, Some(Flag::new(M::default().hash(key)))) {
             FindResult::NotFound => Err(HashTrieError::NotFound),
@@ -49,7 +53,7 @@ impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> HashTr
         }
     }
     
-    pub(crate) fn visit<Op: Clone>(&self, op: Op) where Op: Fn(&'_ V) {
+    pub(crate) fn visit<Op: Clone>(&self, op: Op) where Op: Fn(&V) {
         self.root.visit(op);
     }
 
@@ -59,13 +63,14 @@ impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> HashTr
         Self: Sized,
         ReduceT: Default,
         ReduceOp: Fn(ReduceT, ReduceT) -> ReduceT + Clone,
-        Op: Fn(&V) -> (Option<V>, ReduceT) + Clone
+        Op: Fn(&V) -> (MapTransformResult<V>, ReduceT) + Clone
     {
         match self.root.transform(reduce_op, op) {
-            TransformResult::C(cnode, reduced) => (Self::singleton(MNode::C(cnode)), reduced),
-            TransformResult::L(lnode, reduced) => (Self::singleton(MNode::L(lnode)), reduced),
-            TransformResult::S(snode, reduced) => (Self::singleton(MNode::S(snode)), reduced),
-            TransformResult::Z(reduced) => (Self::default(), reduced),
+            MNodeTransformResult::Unchanged(reduced) => (Self::singleton(self.root.clone()), reduced),
+            MNodeTransformResult::C(cnode, reduced) => (Self::singleton(MNode::C(cnode)), reduced),
+            MNodeTransformResult::L(lnode, reduced) => (Self::singleton(MNode::L(lnode)), reduced),
+            MNodeTransformResult::S(snode, reduced) => (Self::singleton(MNode::S(snode)), reduced),
+            MNodeTransformResult::Removed(reduced) => (Self::default(), reduced),
         }
     }
 
@@ -80,5 +85,13 @@ impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> Clone 
 impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> Default for HashTrie<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> Eq for HashTrie<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {}
+
+impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> PartialEq for HashTrie<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+    fn eq(&self, other: &Self) -> bool {
+        self.root == other.root
     }
 }

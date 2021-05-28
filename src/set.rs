@@ -1,4 +1,4 @@
-use crate::{traits::*, HashTrieError, hash_trie::HashTrie};
+use crate::{traits::*, HashTrieError, hash_trie::HashTrie, MapTransformResult, SetTransformResult};
 use alloc::{borrow::Cow, fmt::Debug};
 use core::hash::{Hash, Hasher};
 
@@ -99,6 +99,11 @@ impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> HashTr
         }
     }
 
+    /// Get the total number of entries in the set.
+    pub fn size(&self) -> usize {
+        self.set.size()
+    }
+
     /// Search the HashTrieSet for the given value and return a reference if found, or `HashTrieError::NotFound` if not found.
     pub fn find(&self, value: &V) -> Result<&V, HashTrieError> {
         self.set.find(value).map(|entry| entry.as_ref())
@@ -114,10 +119,65 @@ impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> HashTr
     pub fn remove(&self, value: &V) -> Result<(Self, &V), HashTrieError> {
         self.set.remove(value).map(|(set, entry)| (Self {set}, entry)).map(|(map, entry)| (map, &entry.value))
     }
+
+    /// Run an operation on each entry in the set.
+    pub fn visit<Op: Clone>(&self, op: Op) where Op: Fn(&V) {
+        self.set.visit(|e| op(&e.value));
+    }
+
+    /// Run a transform operation on each entry in the set. Returns the transformed set and a reduction of the secondary returns of the transform operations.
+    pub fn transform<ReduceT, ReduceOp, Op>
+        (&self, reduce_op: ReduceOp, op: Op) -> (Self, ReduceT)
+        where
+        Self: Sized,
+        ReduceT: Default,
+        ReduceOp: Fn(ReduceT, ReduceT) -> ReduceT + Clone,
+        Op: Fn(&V) -> (SetTransformResult, ReduceT) + Clone
+    {
+        let (set, reduced) = self.set.transform(reduce_op, |e| {
+            let (result, reduced) = op(&e.value);
+            (match result {
+                SetTransformResult::Unchanged => MapTransformResult::Unchanged,
+                SetTransformResult::Removed => MapTransformResult::Removed,
+            }, reduced)
+        });
+        (Self{set}, reduced)
+    }
 }
 
 impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> Default for HashTrieSet<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> Eq for HashTrieSet<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {}
+
+impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> PartialEq for HashTrieSet<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+    fn eq(&self, other: &Self) -> bool {
+        self.set == other.set
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+    use alloc::borrow::Cow;
+    
+    #[test]
+    fn set_transform() {
+        let mut set = DefaultHashTrieSet::<i32>::new();
+
+        for i in 1..101 {
+            set = set.insert(Cow::Owned(i), false).unwrap().0;
+        }
+
+        let same = set.transform(|_,_| (), |_| (SetTransformResult::Unchanged, ()));
+        let removed = set.transform(|_,_| (), |_| (SetTransformResult::Removed, ()));
+        let summed = set.transform(|l,r| l + r, |v| (SetTransformResult::Unchanged, *v));
+
+        assert_eq!(set, same.0);
+        assert_eq!(removed.0.size(), 0);
+        assert_eq!(summed.1, 5050);
     }
 }

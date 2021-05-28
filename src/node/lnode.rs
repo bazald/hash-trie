@@ -1,5 +1,5 @@
 use crate::{flag::*, result::*, traits::*};
-use super::{cnode::*, snode::*};
+use super::{cnode::*, snode::{self, *}};
 use alloc::{fmt::Debug, sync::*};
 
 #[derive(Clone, Debug)]
@@ -76,42 +76,11 @@ impl<V: Value> LNode<V> {
         }
     }
     
-    pub(super) fn visit<Op>(&self, op: Op) where Op: Fn(&'_ V) {
+    pub(super) fn visit<Op>(&self, op: Op) where Op: Fn(&V) {
         op(&self.value);
         match &self.next {
             LNodeNext::L(lnode) => lnode.visit(op),
             LNodeNext::S(snode) => snode.visit(op),
-        }
-    }
-
-    pub(super) fn transform<ReduceT, ReduceOp, Op>
-        (&self, reduce_op: ReduceOp, op: Op) -> LNodeTransformResult<V, ReduceT>
-        where
-        Self: Sized,
-        ReduceT: Default,
-        ReduceOp: Fn(ReduceT, ReduceT) -> ReduceT + Clone,
-        Op: Fn(&V) -> (Option<V>, ReduceT) + Clone
-    {
-        let next = match &self.next {
-            LNodeNext::L(lnode) => lnode.transform(reduce_op.clone(), op.clone()),
-            LNodeNext::S(snode) => match snode.transform(op.clone()) {
-                SNodeTransformResult::S(snode, r) => LNodeTransformResult::S(snode, r),
-                SNodeTransformResult::Z(r) => LNodeTransformResult::Z(r),
-            },
-        };
-
-        let (v, r) = op(&self.value);
-        match v {
-            Some(v) => match next {
-                LNodeTransformResult::L(lnode, rn) => LNodeTransformResult::L(LNode::new(v, LNodeNext::L(lnode)), reduce_op(r, rn)),
-                LNodeTransformResult::S(snode, rn) => LNodeTransformResult::L(LNode::new(v, LNodeNext::S(snode)), reduce_op(r, rn)),
-                LNodeTransformResult::Z(rn) => LNodeTransformResult::S(SNode::new(v), reduce_op(r, rn)),
-            },
-            None => match next {
-                LNodeTransformResult::L(lnode, rn) => LNodeTransformResult::L(lnode, reduce_op(r, rn)),
-                LNodeTransformResult::S(snode, rn) => LNodeTransformResult::S(snode, reduce_op(r, rn)),
-                LNodeTransformResult::Z(rn) => LNodeTransformResult::Z(reduce_op(r, rn)),
-            },
         }
     }
 
@@ -132,6 +101,48 @@ pub(super) fn insert<'a, H: Hashword, F: Flagword<H>, K: 'static, V: Value, C: A
         FindResult::NotFound => {
             lift_to_cnode_and_insert(LNodeNext::L(this.clone()), M::default().hash(&this.value), value.into(), value_flag)
         }
+    }
+}
+
+pub(super) fn transform<V: Value, ReduceT, ReduceOp, Op>(this: &Arc<LNode<V>>, reduce_op: ReduceOp, op: Op) -> LNodeTransformResult<V, ReduceT>
+where
+    ReduceT: Default,
+    ReduceOp: Fn(ReduceT, ReduceT) -> ReduceT + Clone,
+    Op: Fn(&V) -> (MapTransformResult<V>, ReduceT) + Clone
+{
+    let next = match &this.next {
+        LNodeNext::L(lnode) => transform(&lnode, reduce_op.clone(), op.clone()),
+        LNodeNext::S(snode) => match snode::transform(&snode, op.clone()) {
+            SNodeTransformResult::Unchanged(r) => LNodeTransformResult::Unchanged(r),
+            SNodeTransformResult::S(snode, r) => LNodeTransformResult::S(snode, r),
+            SNodeTransformResult::Removed(r) => LNodeTransformResult::Removed(r),
+        },
+    };
+
+    let (t, r) = op(&this.value);
+
+    match t {
+        MapTransformResult::Unchanged => match next {
+            LNodeTransformResult::Unchanged(rn) => LNodeTransformResult::Unchanged(reduce_op(r, rn)),
+            LNodeTransformResult::L(lnode, rn) => LNodeTransformResult::L(LNode::new(this.value.clone(), LNodeNext::L(lnode)), reduce_op(r, rn)),
+            LNodeTransformResult::S(snode, rn) => LNodeTransformResult::L(LNode::new(this.value.clone(), LNodeNext::S(snode)), reduce_op(r, rn)),
+            LNodeTransformResult::Removed(rn) => LNodeTransformResult::S(SNode::new(this.value.clone()), reduce_op(r, rn)),
+        },
+        MapTransformResult::Changed(v) => match next {
+            LNodeTransformResult::Unchanged(rn) => LNodeTransformResult::L(LNode::new(v, this.next.clone()), reduce_op(r, rn)),
+            LNodeTransformResult::L(lnode, rn) => LNodeTransformResult::L(LNode::new(v, LNodeNext::L(lnode)), reduce_op(r, rn)),
+            LNodeTransformResult::S(snode, rn) => LNodeTransformResult::L(LNode::new(v, LNodeNext::S(snode)), reduce_op(r, rn)),
+            LNodeTransformResult::Removed(rn) => LNodeTransformResult::S(SNode::new(v), reduce_op(r, rn)),
+        },
+        MapTransformResult::Removed => match next {
+            LNodeTransformResult::Unchanged(rn) => match &this.next {
+                LNodeNext::L(lnode) => LNodeTransformResult::L(lnode.clone(), reduce_op(r, rn)),
+                LNodeNext::S(snode) => LNodeTransformResult::S(snode.clone(), reduce_op(r, rn)),
+            },
+            LNodeTransformResult::L(lnode, rn) => LNodeTransformResult::L(lnode, reduce_op(r, rn)),
+            LNodeTransformResult::S(snode, rn) => LNodeTransformResult::S(snode, reduce_op(r, rn)),
+            LNodeTransformResult::Removed(rn) => LNodeTransformResult::Removed(reduce_op(r, rn)),
+        },
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{traits::*, HashTrieError, hash_trie::HashTrie};
+use crate::{traits::*, HashTrieError, hash_trie::HashTrie, MapTransformResult};
 use alloc::{borrow::Cow, fmt::Debug};
 use core::hash::{Hash, Hasher};
 
@@ -120,6 +120,11 @@ impl <H: Hashword, F: Flagword<H>, K: Value, V: Clone + Debug + Eq + PartialEq +
         }
     }
 
+    /// Get the total number of entries in the map.
+    pub fn size(&self) -> usize {
+        self.set.size()
+    }
+
     /// Search the HashTrieMap for the given key and return references if found, or `HashTrieError::NotFound` if not found.
     pub fn find(&self, key: &K) -> Result<(&K, &V), HashTrieError> {
         self.set.find(key).map(|entry| entry.as_ref())
@@ -136,10 +141,73 @@ impl <H: Hashword, F: Flagword<H>, K: Value, V: Clone + Debug + Eq + PartialEq +
     pub fn remove(&self, key: &K) -> Result<(Self, &K, &V), HashTrieError> {
         self.set.remove(key).map(|(set, entry)| (Self {set}, entry)).map(|(map, entry)| (map, &entry.key, &entry.value))
     }
+
+    /// Run an operation on each entry in the map.
+    pub fn visit<Op: Clone>(&self, op: Op) where Op: Fn(&K, &V) {
+        self.set.visit(|e| op(&e.key, &e.value));
+    }
+
+    /// Run a transform operation on each entry in the map. Returns the transformed map and a reduction of the secondary returns of the transform operations.
+    pub fn transform<ReduceT, ReduceOp, Op>
+        (&self, reduce_op: ReduceOp, op: Op) -> (Self, ReduceT)
+        where
+        Self: Sized,
+        ReduceT: Default,
+        ReduceOp: Fn(ReduceT, ReduceT) -> ReduceT + Clone,
+        Op: Fn(&K, &V) -> (MapTransformResult<V>, ReduceT) + Clone
+    {
+        let (set, reduced) = self.set.transform(reduce_op, |e| {
+            let (result, reduced) = op(&e.key, &e.value);
+            (match result {
+                MapTransformResult::Unchanged => MapTransformResult::Unchanged,
+                MapTransformResult::Changed(value) => MapTransformResult::Changed(MapEntry::new(e.key.clone(), value)),
+                MapTransformResult::Removed => MapTransformResult::Removed,
+            }, reduced)
+        });
+        (Self{set}, reduced)
+    }
 }
 
 impl <H: Hashword, F: Flagword<H>, K: Value, V: Clone + Debug + Eq + PartialEq + Send + Sync + 'static, M: HasherBv<H, K> + 'static> Default for HashTrieMap<H, F, K, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl <H: Hashword, F: Flagword<H>, K: Value, V: Clone + Debug + Eq + PartialEq + Send + Sync + 'static, M: HasherBv<H, K> + 'static> Eq for HashTrieMap<H, F, K, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {}
+
+impl <H: Hashword, F: Flagword<H>, K: Value, V: Clone + Debug + Eq + PartialEq + Send + Sync + 'static, M: HasherBv<H, K> + 'static> PartialEq for HashTrieMap<H, F, K, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+    fn eq(&self, other: &Self) -> bool {
+        self.set == other.set
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+    use alloc::borrow::Cow;
+    
+    #[test]
+    fn map_transform() {
+        let mut map = DefaultHashTrieMap::<i32, i32>::new();
+        let mut squared = DefaultHashTrieMap::<i32, i32>::new();
+
+        for i in 1..101 {
+            map = map.insert(Cow::Owned(i), Cow::Owned(i), false).unwrap().0;
+            squared = squared.insert(Cow::Owned(i), Cow::Owned(i * i), false).unwrap().0;
+        }
+
+        let same = map.transform(|_,_| (), |_,_| (MapTransformResult::Unchanged, ()));
+        let removed = map.transform(|_,_| (), |_,_| (MapTransformResult::Removed, ()));
+        let tsquared = map.transform(|_,_| (), |_,v| (MapTransformResult::Changed(v * v), ()));
+
+        assert_eq!(map, same.0);
+        assert_eq!(removed.0.size(), 0);
+
+        for i in 1..101 {
+            map.find(&i).unwrap();
+            assert_eq!(i * i, *squared.find(&i).unwrap().1);
+            assert_eq!(i * i, *tsquared.0.find(&i).unwrap().1);
+        }
     }
 }
