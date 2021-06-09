@@ -1,85 +1,62 @@
-use crate::{traits::*, HashTrieError, hash_trie::HashTrie, MapTransformResult, SetTransformResult};
-use alloc::{borrow::Cow, fmt::Debug};
-use core::hash::{Hash, Hasher};
-
-#[derive(Clone, Debug)]
-struct SetEntry<V> {
-    value: V,
-}
-
-impl <V> SetEntry<V> {
-    #[must_use]
-    fn new(value: V) -> Self {
-        Self {value}
-    }
-}
-
-impl <V> AsRef<V> for SetEntry<V> {
-    fn as_ref(&self) -> &V {
-        &self.value
-    }
-}
-
-impl <'a, V: Clone + Debug> From<Cow<'a, V>> for SetEntry<V> {
-    fn from(cow: Cow<'a, V>) -> Self {
-        SetEntry::new(cow.into_owned())
-    }
-}
-
-impl <B, V, H: HasherBv<B, V>> HasherBv<B, SetEntry<V>> for H {
-    fn hash(&self, entry: &SetEntry<V>) -> B {
-        H::default().hash(&entry.value)
-    }
-}
-
-impl <V: Hash> Hash for SetEntry<V> {
-    fn hash<H: Hasher>(&self, hasher: &mut H) {
-        self.value.hash(hasher)
-    }
-}
-
-impl <V: Eq> Eq for SetEntry<V> {}
-
-impl <V: PartialEq> PartialEq for SetEntry<V> {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
-    }
-}
-
-impl <V: PartialEq> PartialEq<V> for SetEntry<V> {
-    fn eq(&self, other: &V) -> bool {
-        self.value == *other
-    }
-}
-
-impl <V> HashLike<V> for SetEntry<V> {}
-impl <V> HashLike<SetEntry<V>> for V {}
+use crate::{traits::*, hash_trie::HashTrie, *};
+use alloc::fmt::Debug;
 
 /// `HashTrieSet` implements a hash set using a hash array mapped trie (HAMT).
 /// 
 /// # Example Usage
 /// 
 /// ```
-/// use hash_trie::HashTrieSet;
-/// use std::{borrow::Cow, collections::hash_map::DefaultHasher};
-///
-/// let mut hash_set: HashTrieSet<u64, u32, String, DefaultHasher> = HashTrieSet::new();
-/// let hello_world: String = "Hello, world!".into();
-///
-/// hash_set = hash_set.insert(Cow::Borrowed(&hello_world), false).unwrap().0;
+/// use hash_trie::{HashTrieSet, traits::HashLike};
+/// use std::{collections::hash_map::DefaultHasher, string::String};
 /// 
-/// // Inserting an already-inserted value returns a reference to the value in the set...
-/// assert_eq!(*hash_set.insert(Cow::Borrowed(&hello_world), false).unwrap_err(), hello_world);
+/// #[derive(Clone,Debug,Eq,Hash,PartialEq)]
+/// struct Str<'a> {
+///     s: &'a str
+/// }
+/// 
+/// impl <'a> Str<'a> {
+///     fn new(s: &'a str) -> Self {
+///         Self {s}
+///     }
+/// }
+/// 
+/// impl <'a> Default for Str<'a> {
+///     fn default() -> Self {
+///         Self {s: ""}
+///     }
+/// }
+/// impl <'a> From<Str<'a>> for String {
+///     fn from(s: Str<'a>) -> String {
+///         s.s.into()
+///     }
+/// }
+/// impl <'a> PartialEq<Str<'a>> for String {
+///     fn eq(&self, other: &Str<'a>) -> bool {
+///         *self == other.s
+///     }
+/// }
+/// impl <'a> HashLike<String> for Str<'a> {}
+/// impl <'a> HashLike<Str<'a>> for String {}
+/// unsafe impl <'a> Send for Str<'a> {}
+/// unsafe impl <'a> Sync for Str<'a> {}
+/// 
+/// let mut hash_set: HashTrieSet<u64, u32, String, DefaultHasher> = HashTrieSet::new();
+/// let hello_world = "Hello, world!";
+///
+/// hash_set = hash_set.insert(Str::new(hello_world), false).unwrap().0;
+/// 
+/// // Inserting an already-inserted key returns a reference to the key in the set...
+/// assert!(hash_set.insert(Str::new(hello_world), false).map_err(|reference| *reference.get() == hello_world).unwrap_err());
 /// // ... unless you enable replacement.
-/// assert!(hash_set.insert(Cow::Borrowed(&hello_world), true).is_ok());
+/// assert!(hash_set.insert(Str::new(hello_world), true).is_ok());
 ///
-/// assert_eq!(*hash_set.find(&hello_world).unwrap(), hello_world);
+/// assert!(hash_set.find(&Str::new(hello_world)).map(|reference| *reference.get() == hello_world).unwrap());
 ///
-/// match hash_set.remove(&hello_world) {
+/// match hash_set.remove(&Str::new(hello_world)) {
 ///     Ok((mutated, reference)) => {
-///         // Removing a value returns a reference to the value
+///         // Removing a key returns a reference to the key
 ///         // in the set in addition to the mutated set.
-///         println!("Value stored in hash_set: {}", reference);
+///         println!("Value stored in hash_set: {}", reference.get());
 ///         hash_set = mutated;
 ///     },
 ///     Err(_) => panic!(),
@@ -87,15 +64,15 @@ impl <V> HashLike<SetEntry<V>> for V {}
 /// ```
 #[derive(Clone, Debug)]
 #[must_use]
-pub struct HashTrieSet <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
-    set: HashTrie<H, F, SetEntry<V>, M>,
+pub struct HashTrieSet <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+    set: HashTrie<H, F, K, Zst, M>,
 }
 
-impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> HashTrieSet<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, K, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     /// Get a new, empty HashTrieSet.
     pub fn new() -> Self {
         Self {
-            set: HashTrie::<H, F, SetEntry<V>, M>::new()
+            set: HashTrie::<H, F, K, Zst, M>::new()
         }
     }
 
@@ -104,56 +81,96 @@ impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> HashTr
         self.set.size()
     }
 
-    /// Search the HashTrieSet for the given value and return a reference if found, or `HashTrieError::NotFound` if not found.
-    pub fn find(&self, value: &V) -> Result<&V, HashTrieError> {
-        self.set.find(value).map(|entry| entry.as_ref())
+    /// Search the HashTrieSet for the given key and return a reference if found, or `HashTrieError::NotFound` if not found.
+    pub fn find<L: Key + HashLike<K>>(&self, key: &L) -> Result<KeyRef<K, Zst>, HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L> {
+        self.set.find(key).map(|key_value| key_value.into())
     }
 
-    /// Search the HashTrieSet for the spot to insert the value and return both a mutated set and, if applicable, a reference to the replaced value.
-    /// If found and replacement is disabled, a reference to the existing value is returned.
-    pub fn insert<'a>(&'a self, value: Cow<'a, V>, replace: bool) -> Result<(Self, Option<&'a V>), &'a V> {
-        self.set.insert(value, replace).map(|(set, reference)| (Self {set}, reference.map(|entry| entry.as_ref()))).map_err(|entry| entry.as_ref())
+    /// Search the HashTrieSet for the spot to insert the key and return both a mutated set and, if applicable, a reference to the replaced key.
+    /// If found and replacement is disabled, a reference to the existing key is returned.
+    pub fn insert<L: Key + HashLike<K> + Into<K>>(&self, key: L, replace: bool) -> Result<(Self, KeyRef<K, Zst>), KeyRef<K, Zst>>
+    where
+        K: HashLike<L>,
+        K: PartialEq<L>,
+        M: HasherBv<H, L>
+    {
+        self.set.insert(key, Zst{}, replace).map(|(set, key_value)| (Self {set}, key_value.into())).map_err(|key_value| key_value.into())
     }
 
-    /// Search the HashTrieSet for the given value to remove and return a mutated set, or `HashTrieError::NotFound` if not found.
-    pub fn remove(&self, value: &V) -> Result<(Self, &V), HashTrieError> {
-        self.set.remove(value).map(|(set, entry)| (Self {set}, entry)).map(|(map, entry)| (map, &entry.value))
+    /// Search the HashTrieSet for the given key to remove and return a mutated set, or `HashTrieError::NotFound` if not found.
+    pub fn remove<L: Key + HashLike<K>>(&self, key: &L) -> Result<(Self, KeyRef<K, Zst>), HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L> {
+        self.set.remove(key).map(|(set, key_value)| (Self {set}, key_value.into()))
     }
 
     /// Run an operation on each entry in the set.
-    pub fn visit<Op: Clone>(&self, op: Op) where Op: Fn(&V) {
-        self.set.visit(|e| op(&e.value));
+    pub fn visit<Op: Clone>(&self, op: Op) where Op: Fn(&K) {
+        self.set.visit(|key, _value| op(key));
     }
 
     /// Run a transform operation on each entry in the set. Returns the transformed set and a reduction of the secondary returns of the transform operations.
-    pub fn transform<ReduceT, ReduceOp, Op>
-        (&self, reduce_op: ReduceOp, op: Op) -> (Self, ReduceT)
+    pub fn transform<S: Key + HashLike<S>, ReduceT, ReduceOp, Op>
+        (&self, reduce_op: ReduceOp, op: Op) -> (HashTrieSet<H, F, S, M>, ReduceT)
         where
         Self: Sized,
         ReduceT: Default,
-        ReduceOp: Fn(ReduceT, ReduceT) -> ReduceT + Clone,
-        Op: Fn(&V) -> (SetTransformResult, ReduceT) + Clone
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        Op: Fn(&K) -> SetTransformResult<S, ReduceT> + Clone,
+        K: HashLike<S>,
+        K: PartialEq<S>,
+        M: HasherBv<H, S>,
     {
-        let (set, reduced) = self.set.transform(reduce_op, |e| {
-            let (result, reduced) = op(&e.value);
-            (match result {
-                SetTransformResult::Unchanged => MapTransformResult::Unchanged,
-                SetTransformResult::Removed => MapTransformResult::Removed,
-            }, reduced)
+        let (set, reduced) = self.set.transform(reduce_op, |key, _value| match op(key) {
+            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, Zst{}, reduced),
+            SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
         });
-        (Self{set}, reduced)
+        (HashTrieSet::<H, F, S, M>{set}, reduced)
     }
+
+    /// Run a transform operation on each entry in the set. Returns the transformed set and a reduction of the secondary returns of the transform operations.
+    pub fn joint_transform<L: Key + HashLike<K>, W: Value, S: Key + HashLike<K>, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+        (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (HashTrieSet<H, F, S, M>, ReduceT)
+        where
+        Self: Sized,
+        ReduceT: Default,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        BothOp: Fn(&K, &L) -> SetTransformResult<S, ReduceT> + Clone,
+        LeftOp: Fn(&K) -> SetTransformResult<S, ReduceT> + Clone,
+        RightOp: Fn(&L) -> SetTransformResult<S, ReduceT> + Clone,
+        K: HashLike<L>,
+        K: PartialEq<L>,
+        K: HashLike<S>,
+        K: PartialEq<S>,
+        L: HashLike<K>,
+        L: PartialEq<K>,
+        L: HashLike<S>,
+        L: PartialEq<S>,
+        M: HasherBv<H, L>,
+        M: HasherBv<H, S>,
+    {
+        let (set, reduced) = self.set.joint_transform(&right.set, reduce_op, |l,_,r,_| match both_op(l, r) {
+            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, Zst{}, reduced),
+            SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
+        }, |l,_| match left_op(l) {
+            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, Zst{}, reduced),
+            SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
+        }, |r,_| match right_op(r) {
+            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, Zst{}, reduced),
+            SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
+        });
+        (HashTrieSet::<H, F, S, M>{set}, reduced)
+    }
+
 }
 
-impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> Default for HashTrieSet<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> Default for HashTrieSet<H, F, K, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> Eq for HashTrieSet<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {}
+impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> Eq for HashTrieSet<H, F, K, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {}
 
-impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> PartialEq for HashTrieSet<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> PartialEq for HashTrieSet<H, F, K, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     fn eq(&self, other: &Self) -> bool {
         self.set == other.set
     }
@@ -162,21 +179,18 @@ impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> Partia
 #[cfg(test)]
 mod tests {
     use crate::*;
-    use alloc::borrow::Cow;
     
     #[test]
     fn set_transform() {
         let mut set = DefaultHashTrieSet::<i32>::new();
 
         for i in 1..101 {
-            set = set.insert(Cow::Owned(i), false).unwrap().0;
+            set = set.insert(i, false).unwrap().0;
         }
 
-        let same = set.transform(|_,_| (), |_| (SetTransformResult::Unchanged, ()));
-        let removed = set.transform(|_,_| (), |_| (SetTransformResult::Removed, ()));
-        let summed = set.transform(|l,r| l + r, |v| (SetTransformResult::Unchanged, *v));
+        let removed = set.transform(|_,_| (), |_| SetTransformResult::Removed(()));
+        let summed = set.transform(|&l,&r| l + r, |&k| SetTransformResult::Removed(k));
 
-        assert_eq!(set, same.0);
         assert_eq!(removed.0.size(), 0);
         assert_eq!(summed.1, 5050);
     }

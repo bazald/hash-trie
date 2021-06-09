@@ -19,6 +19,20 @@ impl <H: Hashword, F: Flagword<H>> Flag<H, F> where <F as core::convert::TryFrom
     }
 
     #[must_use]
+    pub(crate) fn new_at_depth(hash_value: H, depth: usize) -> Option<Self> {
+        if depth * F::log_b() >= 8 * <H>::max_ones() {
+            None
+        }
+        else {
+            Some(Flag {
+                hash_value: hash_value.clone(),
+                depth: depth + 1,
+                flag: F::nth_bit(F::try_from(H::from(hash_value.shr((depth + 1) * F::log_b())).bitand(F::mask_log_b())).unwrap().as_usize()).unwrap()
+            })
+        }
+    }
+
+    #[must_use]
     pub(crate) fn hash_value(&self) -> H {
         self.hash_value.clone()
     }
@@ -34,17 +48,8 @@ impl <H: Hashword, F: Flagword<H>> Flag<H, F> where <F as core::convert::TryFrom
     }
 
     #[must_use]
-    pub(crate) fn next(&self) -> Option<Flag<H, F>> {
-        if self.depth * F::log_b() >= 8 * <H>::max_ones() {
-            None
-        }
-        else {
-            Some(Flag {
-                hash_value: self.hash_value.clone(),
-                depth: self.depth + 1,
-                flag: F::nth_bit(F::try_from(H::from(self.hash_value.clone().shr((self.depth + 1) * F::log_b())).bitand(F::mask_log_b())).unwrap().as_usize()).unwrap()
-            })
-        }
+    pub(crate) fn next(&self) -> Option<Self> {
+        Self::new_at_depth(self.hash_value().clone(), self.depth + 1)
     }
 }
 

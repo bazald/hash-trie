@@ -5,17 +5,17 @@ HashTrie provides containers based on Hash Array Mapped Tries (HAMT). They are c
 `HashTrieSet` implements a hash set. Here's a quick usage example.
 ```
 use hash_trie::HashTrieSet;
-use std::{borrow::Cow, collections::hash_map::DefaultHasher};
+use std::collections::hash_map::DefaultHasher;
 
 let mut hash_set: HashTrieSet<u64, u32, String, DefaultHasher> = HashTrieSet::new();
 let hello_world: String = "Hello, world!".into();
 
-hash_set = hash_set.insert(Cow::Borrowed(&hello_world), false).unwrap().0;
+hash_set = hash_set.insert(&hello_world, false).unwrap().0;
 
 // Inserting an already-inserted value returns a reference to the value in the set...
-assert_eq!(*hash_set.insert(Cow::Borrowed(&hello_world), false).unwrap_err(), hello_world);
+assert_eq!(*hash_set.insert(&hello_world, false).unwrap_err(), hello_world);
 // ... unless you enable replacement.
-assert!(hash_set.insert(Cow::Borrowed(&hello_world), true).is_ok());
+assert!(hash_set.insert(&hello_world, true).is_ok());
 
 assert_eq!(*hash_set.find(&hello_world).unwrap(), hello_world);
 

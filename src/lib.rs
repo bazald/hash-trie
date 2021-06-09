@@ -18,8 +18,14 @@ mod node;
 mod set;
 pub mod traits;
 
+#[derive(Clone, Debug)]
+pub struct Zst {}
+
 pub use result::BitError as BitError;
 pub use result::HashTrieError as HashTrieError;
+
+pub use result::KeyRef as KeyRef;
+pub use result::KeyValueRef as KeyValueRef;
 
 pub use result::SetTransformResult as SetTransformResult;
 pub use result::MapTransformResult as MapTransformResult;
@@ -37,12 +43,11 @@ pub type DefaultHashTrieMap<K, V> = map::HashTrieMap<u64, u32, K, V, std::collec
 mod tests {
     use crate::{DefaultHashTrieMap, DefaultHashTrieSet};
     use alloc::string::String;
-    use std::borrow::Cow;
 
     #[test]
     fn std_test() {
-        let _hash_set = DefaultHashTrieSet::<i32>::new().insert(Cow::Owned(42), false);
-        let _hash_map = DefaultHashTrieMap::<i32, String>::new().insert(Cow::Owned(42), Cow::Owned("Hello, world!".into()), false);
+        let _hash_set = DefaultHashTrieSet::<i32>::new().insert(42, false);
+        let _hash_map = DefaultHashTrieMap::<i32, String>::new().insert(42, "Hello, world!", false);
     }
 
 }

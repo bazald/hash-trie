@@ -3,13 +3,13 @@ use super::{cnode::{self, *}, lnode::{self, LNode}, snode::{self, SNode}};
 use alloc::{fmt::Debug, sync::Arc};
 
 #[derive(Debug)]
-pub(crate) enum MNode <H: Hashword, F: Flagword<H>, V: Value, M: 'static> {
-    C(CNode<H, F, V, M>),
-    L(Arc<LNode<V>>),
-    S(Arc<SNode<V>>),
+pub(crate) enum MNode <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> {
+    C(CNode<H, F, K, V, M>),
+    L(Arc<LNode<K, V>>),
+    S(Arc<SNode<K, V>>),
 }
 
-impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> MNode<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> MNode<H, F, K, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     #[must_use]
     pub(crate) fn size(&self) -> usize {
         match self {
@@ -19,23 +19,39 @@ impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> MNode<
         }
     }
 
-    pub(crate) fn find<'a, K>(&'a self, key: &K, flag: Option<Flag<H, F>>) -> FindResult<'a, V> where V: PartialEq<K> {
+    pub(crate) fn find<L: Key>(&self, key: &L, flag: Option<Flag<H, F>>) -> FindResult<K, V>
+    where
+        K: PartialEq<L>
+    {
         match self {
             Self::C(cnode) => cnode.find(key, flag),
-            Self::L(lnode) => lnode.find(key),
-            Self::S(snode) => snode.find(key),
+            Self::L(lnode) => lnode::find(lnode, key),
+            Self::S(snode) => snode::find(snode, key),
         }
     }
-    
-    pub(crate) fn remove<'a, K>(&'a self, key: &K, flag: Option<Flag<H, F>>) -> RemoveResult<'a, H, F, V, M> where V: PartialEq<K> {
+
+    pub(crate) fn insert<L: Key + Into<K>, W: Into<V>>(&self, key: L, value: W, flag: Option<Flag<H, F>>, replace: bool) -> InsertResult<H, F, K, V, M>
+    where
+        K: HashLike<L>,
+        K: PartialEq<L>,
+        M: HasherBv<H, L>,
+    {
+        match self {
+            Self::C(cnode) => cnode.insert(key, value, flag, replace),
+            Self::L(lnode) => lnode::insert(&lnode, key, value, flag, replace),
+            Self::S(snode) => snode::insert(&snode, key, value, flag, replace),
+        }
+    }
+
+    pub(crate) fn remove<L: Key>(&self, key: &L, flag: Option<Flag<H, F>>) -> RemoveResult<H, F, K, V, M> where K: PartialEq<L>, M: HasherBv<H, L> {
         match self {
             Self::C(cnode) => cnode.remove(key, flag),
-            Self::L(lnode) => lnode.remove(key),
-            Self::S(snode) => snode.remove(key),
+            Self::L(lnode) => lnode::remove(lnode, key),
+            Self::S(snode) => snode::remove(snode, key).into(),
         }
     }
     
-    pub(crate) fn visit<Op: Clone>(&self, op: Op) where Op: Fn(&V) {
+    pub(crate) fn visit<Op: Clone>(&self, op: Op) where Op: Fn(&K, &V) {
         match self {
             Self::C(cnode) => cnode.visit(op),
             Self::L(lnode) => lnode.visit(op),
@@ -43,42 +59,104 @@ impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> MNode<
         }
     }
 
-    pub(crate) fn transform<ReduceT, ReduceOp, Op>(&self, reduce_op: ReduceOp, op: Op) -> MNodeTransformResult<H, F, V, M, ReduceT>
+    pub(crate) fn transform<S: Key, X: Value, ReduceT, ReduceOp, Op>(&self, reduce_op: ReduceOp, op: Op) -> MNodeTransformResult<H, F, S, X, M, ReduceT>
     where
         ReduceT: Default,
-        ReduceOp: Fn(ReduceT, ReduceT) -> ReduceT + Clone,
-        Op: Fn(&V) -> (MapTransformResult<V>, ReduceT) + Clone,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        Op: Fn(&K, &V) -> MapTransformResult<S, X, ReduceT> + Clone,
+        K: HashLike<S>,
+        K: PartialEq<S>,
+        M: HasherBv<H, S>,
         <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
     {
         match self {
-            MNode::<H, F, V, M>::C(cnode) => cnode::transform(cnode, reduce_op, op),
-            MNode::<H, F, V, M>::L(lnode) => match lnode::transform(lnode, reduce_op, op) {
-                LNodeTransformResult::Unchanged(reduced) => MNodeTransformResult::Unchanged(reduced),
-                LNodeTransformResult::L(lnode, reduced) => MNodeTransformResult::L(lnode, reduced),
-                LNodeTransformResult::S(snode, reduced) => MNodeTransformResult::S(snode, reduced),
-                LNodeTransformResult::Removed(reduced) => MNodeTransformResult::Removed(reduced),
-            },
-            MNode::<H, F, V, M>::S(snode) => match snode::transform(snode, op) {
-                SNodeTransformResult::Unchanged(reduced) => MNodeTransformResult::Unchanged(reduced),
-                SNodeTransformResult::S(snode, reduced) => MNodeTransformResult::S(snode, reduced),
-                SNodeTransformResult::Removed(reduced) => MNodeTransformResult::Removed(reduced),
-            },
+            MNode::<H, F, K, V, M>::C(cnode) => cnode::transform(cnode, reduce_op, op),
+            MNode::<H, F, K, V, M>::L(lnode) => lnode::transform(lnode, reduce_op, op).into(),
+            MNode::<H, F, K, V, M>::S(snode) => snode::transform(snode, op).into(),
         }
     }
-    
-}
 
-impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> MNode<H, F, V, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
-    pub(crate) fn insert<'a, K: 'static, C: AsRef<K> + Into<V>>(&'a self, value: C, flag: Option<Flag<H, F>>, replace: bool) -> InsertResult<'a, H, F, V, M> where V: PartialEq<K> {
+    pub(crate) fn joint_transform<L: Key, W: Value, S: Key, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(&self, right: &MNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp, depth: usize) -> MNodeTransformResult<H, F, S, X, M, ReduceT>
+    where
+        ReduceT: Default,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransformResult<S, X, ReduceT> + Clone,
+        RightOp: Fn(&L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
+        K: HashLike<L>,
+        K: PartialEq<L>,
+        K: HashLike<S>,
+        K: PartialEq<S>,
+        L: HashLike<K>,
+        L: PartialEq<K>,
+        L: HashLike<S>,
+        L: PartialEq<S>,
+        M: HasherBv<H, L>,
+        M: HasherBv<H, S>,
+        <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
+    {
         match self {
-            Self::C(cnode) => cnode.insert(value, flag, replace),
-            Self::L(lnode) => lnode::insert(&lnode, value, flag, replace),
-            Self::S(snode) => snode::insert(&snode, value, flag, replace),
+            MNode::<H, F, K, V, M>::C(cnode) => cnode::joint_transform(cnode, right, reduce_op, both_op, left_op, right_op, depth),
+            MNode::<H, F, K, V, M>::L(lnode) => lnode::joint_transform(lnode, right, reduce_op, both_op, left_op, right_op, depth),
+            MNode::<H, F, K, V, M>::S(snode) => snode::joint_transform(snode, right, reduce_op, both_op, left_op, right_op, depth),
         }
     }
+
+    pub(crate) fn joint_transform_lnode<L: Key, W: Value, S: Key, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(&self, right: &Arc<LNode<L, W>>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp, depth: usize) -> MNodeTransformResult<H, F, S, X, M, ReduceT>
+    where
+        ReduceT: Default,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransformResult<S, X, ReduceT> + Clone,
+        RightOp: Fn(&L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
+        K: HashLike<L>,
+        K: PartialEq<L>,
+        K: HashLike<S>,
+        K: PartialEq<S>,
+        L: HashLike<K>,
+        L: PartialEq<K>,
+        L: HashLike<S>,
+        L: PartialEq<S>,
+        M: HasherBv<H, L>,
+        M: HasherBv<H, S>,
+        <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
+    {
+        match self {
+            MNode::<H, F, K, V, M>::C(cnode) => cnode::joint_transform_lnode(cnode, right, reduce_op, both_op, left_op, right_op, depth),
+            MNode::<H, F, K, V, M>::L(lnode) => lnode::joint_transform_lnode(lnode, right, reduce_op, both_op, left_op, right_op, depth),
+            MNode::<H, F, K, V, M>::S(snode) => lnode::joint_transform_snode(right, snode, reduce_op, |k,v,l,w| both_op(l, w, k, v), right_op, left_op, depth),
+        }
+    }
+
+    pub(crate) fn joint_transform_snode<L: Key, W: Value, S: Key, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(&self, right: &Arc<SNode<L, W>>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp, depth: usize) -> MNodeTransformResult<H, F, S, X, M, ReduceT>
+    where
+        ReduceT: Default,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransformResult<S, X, ReduceT> + Clone,
+        RightOp: Fn(&L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
+        K: HashLike<L>,
+        K: PartialEq<L>,
+        K: HashLike<S>,
+        K: PartialEq<S>,
+        L: HashLike<K>,
+        L: PartialEq<K>,
+        L: HashLike<S>,
+        L: PartialEq<S>,
+        M: HasherBv<H, L>,
+        M: HasherBv<H, S>,
+        <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
+    {
+        match self {
+            MNode::<H, F, K, V, M>::C(cnode) => cnode::joint_transform_snode(cnode, right, reduce_op, both_op, left_op, right_op, depth),
+            MNode::<H, F, K, V, M>::L(lnode) => lnode::joint_transform_snode(lnode, right, reduce_op, both_op, left_op, right_op, depth),
+            MNode::<H, F, K, V, M>::S(snode) => snode::joint_transform_snode(snode, right, reduce_op, both_op, left_op, right_op, depth),
+        }
+    }
+
 }
 
-impl <H: Hashword, F: Flagword<H>, V: Value, M: 'static> Clone for MNode<H, F, V, M> {
+impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> Clone for MNode<H, F, K, V, M> {
     fn clone(&self) -> Self {
         match self {
             Self::C(this) => Self::C((*this).clone()),
@@ -88,15 +166,15 @@ impl <H: Hashword, F: Flagword<H>, V: Value, M: 'static> Clone for MNode<H, F, V
     }
 }
 
-impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> Default for MNode<H, F, V, M> {
+impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> Default for MNode<H, F, K, V, M> {
     fn default() -> Self {
-        Self::C(CNode::<H, F, V, M>::default())
+        Self::C(CNode::<H, F, K, V, M>::default())
     }
 }
 
-impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> Eq for MNode<H, F, V, M> {}
+impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> Eq for MNode<H, F, K, V, M> {}
 
-impl <H: Hashword, F: Flagword<H>, V: Value, M: HasherBv<H, V> + 'static> PartialEq for MNode<H, F, V, M> {
+impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> PartialEq for MNode<H, F, K, V, M> {
     fn eq(&self, other: &Self) -> bool {
         match self {
             MNode::C(cnode) => if let MNode::C(other) = other {

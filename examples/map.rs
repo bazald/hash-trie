@@ -1,6 +1,6 @@
 use hash_trie::HashTrieMap;
 use im::HashMap as ImHashMap;
-use std::{borrow::Cow, collections::{hash_map::DefaultHasher, hash_map::HashMap}, time::SystemTime, vec::Vec};
+use std::{collections::{hash_map::DefaultHasher, hash_map::HashMap}, time::SystemTime, vec::Vec};
 use rand::{Rng, seq::SliceRandom};
 
 fn main() {
@@ -121,7 +121,7 @@ fn hash_trie_map() -> u128 {
     let t0 = SystemTime::now();
 
     for v in insertions {
-        if let Ok(ht) = hash_trie.insert(Cow::Owned(v), Cow::Owned(0x42), false) {
+        if let Ok(ht) = hash_trie.insert(v, 0x42, false) {
             hash_trie = ht.0;
         }
     }
@@ -135,7 +135,7 @@ fn hash_trie_map() -> u128 {
     let t2 = SystemTime::now();
 
     for v in removals {
-        if let Ok((ht, _found_k, _found_v)) = hash_trie.remove(&v) {
+        if let Ok((ht, _found_key_value)) = hash_trie.remove(&v) {
             hash_trie = ht;
         }
     }

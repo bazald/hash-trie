@@ -211,10 +211,15 @@ pub trait Flagword<H: Hashword>: AsUsize + BitContains + BitIndex + BitInsert + 
 impl <H: Hashword, F: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + MaxOnes + NthBit + PartialEq> Flagword<H>
 for F where F: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + MaxOnes + NthBit + PartialEq + 'static {}
 
-/// `Value` lists the requirements on the value type for the hash array mapped trie to function.
-pub trait Value: Clone + Debug + Eq + PartialEq + Hash + Send + Sync + 'static {}
-impl <T: Clone + Debug + Eq + PartialEq + Hash + Send + Sync + 'static> Value
+/// `Key` lists the requirements on the key type for the hash array mapped trie to function.
+pub trait Key: Clone + Debug + Eq + PartialEq + Hash + Send + Sync + 'static {}
+impl <T: Clone + Debug + Eq + PartialEq + Hash + Send + Sync + 'static> Key
 for T where T: Clone + Debug + Eq + PartialEq + Hash + Send + Sync + 'static {}
+
+/// `Value` lists the requirements on the value type for the hash array mapped trie to function.
+pub trait Value: Clone + Debug + Send + Sync + 'static {}
+impl <T: Clone + Debug + Send + Sync + 'static> Value
+for T where T: Clone + Debug + Send + Sync + 'static {}
 
 /// `HashLike` provides a means to assert that two types will hash identically.
 pub trait HashLike<T> {}

@@ -1,6 +1,6 @@
 use hash_trie::HashTrieSet;
 use im::HashSet as ImHashSet;
-use std::{borrow::Cow, collections::{hash_map::DefaultHasher, hash_set::HashSet}, time::SystemTime, vec::Vec};
+use std::{collections::{hash_map::DefaultHasher, hash_set::HashSet}, time::SystemTime, vec::Vec};
 use rand::{Rng, seq::SliceRandom};
 
 fn main() {
@@ -121,7 +121,7 @@ fn hash_trie_set() -> u128 {
     let t0 = SystemTime::now();
 
     for v in insertions {
-        if let Ok(ht) = hash_trie.insert(Cow::Owned(v), false) {
+        if let Ok(ht) = hash_trie.insert(v, false) {
             hash_trie = ht.0;
         }
     }
