@@ -26,14 +26,14 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         self.root.size()
     }
 
-    pub(crate) fn find<L: Key + HashLike<K>>(&self, key: &L) -> Result<KeyValueRef<K, V>, HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L>, <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
+    pub(crate) fn find<'a, L: Key + HashLike<K>>(&'a self, key: &L) -> Result<(&'a K, &'a V), HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L>, <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
         match self.root.find(key, Some(Flag::new(M::default().hash(key)))) {
             FindResult::NotFound => Err(HashTrieError::NotFound),
-            FindResult::Found(key_value) => Ok(key_value)
+            FindResult::Found(key, value) => Ok((key, value))
         }
     }
 
-    pub(crate) fn insert<L: Key + Into<K> + Hash + HashLike<K>, W: Into<V>>(&self, key: L, value: W, replace: bool) -> Result<(Self, KeyValueRef<K, V>), KeyValueRef<K, V>>
+    pub(crate) fn insert<'a, L: Key + Into<K> + Hash + HashLike<K>, W: Into<V>>(&'a self, key: L, value: W, replace: bool) -> Result<(Self, *const K, *const V), (&'a K, &'a V)>
     where
         K: HashLike<L>,
         K: PartialEq<L>,
@@ -41,20 +41,20 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     {
         let flag = Flag::from(M::default().hash(&key));
         match self.root.insert(key, value, Some(flag), replace) {
-            InsertResult::Found(key_value) => Err(key_value),
-            InsertResult::InsertedC(cnode, key_value) => Ok((Self::singleton(MNode::C(cnode)), key_value)),
-            InsertResult::InsertedL(lnode, key_value) => Ok((Self::singleton(MNode::L(lnode)), key_value)),
-            InsertResult::InsertedS(snode, key_value) => Ok((Self::singleton(MNode::S(snode)), key_value)),
+            InsertResult::Found(key, value) => Err((key, value)),
+            InsertResult::InsertedC(cnode, key, value) => Ok((Self::singleton(MNode::C(cnode)), key, value)),
+            InsertResult::InsertedL(lnode, key, value) => Ok((Self::singleton(MNode::L(lnode)), key, value)),
+            InsertResult::InsertedS(snode, key, value) => Ok((Self::singleton(MNode::S(snode)), key, value)),
         }
     }
 
-    pub(crate) fn remove<L: Key + HashLike<K>>(&self, key: &L) -> Result<(Self, KeyValueRef<K, V>), HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L> {
+    pub(crate) fn remove<'a, L: Key + HashLike<K>>(&'a self, key: &L) -> Result<(Self, &'a K, &'a V), HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L> {
         match self.root.remove(key, Some(Flag::from(M::default().hash(key)))) {
             RemoveResult::NotFound => Err(HashTrieError::NotFound),
-            RemoveResult::RemovedC(cnode, key_value) => Ok((Self::singleton(MNode::C(cnode)), key_value)),
-            RemoveResult::RemovedL(lnode, key_value) => Ok((Self::singleton(MNode::L(lnode)), key_value)),
-            RemoveResult::RemovedS(snode, key_value) => Ok((Self::singleton(MNode::S(snode)), key_value)),
-            RemoveResult::RemovedZ(key_value) => Ok((Self::default(), key_value))
+            RemoveResult::RemovedC(cnode, key, value) => Ok((Self::singleton(MNode::C(cnode)), key, value)),
+            RemoveResult::RemovedL(lnode, key, value) => Ok((Self::singleton(MNode::L(lnode)), key, value)),
+            RemoveResult::RemovedS(snode, key, value) => Ok((Self::singleton(MNode::S(snode)), key, value)),
+            RemoveResult::RemovedZ(key, value) => Ok((Self::default(), key, value))
         }
     }
     

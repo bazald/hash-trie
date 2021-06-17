@@ -1,27 +1,11 @@
 use crate::{flag::*, result::*, traits::*};
-use super::{cnode::self, mnode::*, snode::{self, *}};
+use super::{cnode::{self}, mnode::*, snode::{self, *}};
 use alloc::{fmt::Debug, sync::*, vec::Vec};
 
 #[derive(Clone, Debug)]
 pub(crate) enum LNodeNext<K: Key, V: Value> {
     L(Arc<LNode<K, V>>),
     S(Arc<SNode<K, V>>),
-}
-
-impl <K: Key, V: Value> LNodeNext<K, V> {
-    pub(crate) fn key(&self) -> &K {
-        match self {
-            LNodeNext::L(lnode) => lnode.key(),
-            LNodeNext::S(snode) => snode.key(),
-        }
-    }
-
-    pub(crate) fn value(&self) -> &V {
-        match self {
-            LNodeNext::L(lnode) => lnode.value(),
-            LNodeNext::S(snode) => snode.value(),
-        }
-    }
 }
 
 impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> From<LNodeNext<K, V>> for MNode<H, F, K, V, M> {
@@ -79,67 +63,67 @@ impl<K: Key, V: Value> LNode<K, V> {
         }
     }
 
-}
-
-pub(super) fn find<K: Key, V: Value, L: Key>(this: &Arc<LNode<K, V>>, key: &L) -> FindResult<K, V> where K: PartialEq<L> {
-    if this.key == *key {
-        FindResult::Found(this.clone().into())
-    }
-    else {
-        match &this.next {
-            LNodeNext::L(lnode) => find(lnode, key),
-            LNodeNext::S(snode) => snode::find(snode, key),
+    pub(super) fn find<'a, L: Key>(&'a self, key: &L) -> FindResult<'a, K, V> where K: PartialEq<L> {
+        if self.key == *key {
+            FindResult::Found(self.key(), self.value())
+        }
+        else {
+            match &self.next {
+                LNodeNext::L(lnode) => lnode.find(key),
+                LNodeNext::S(snode) => snode.find(key),
+            }
         }
     }
+    
 }
 
-pub(super) fn insert<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key + Into<K>, W: Into<V>, M: HasherBv<H, K>>(this: &Arc<LNode<K, V>>, key: L, value: W, key_flag: Option<Flag<H, F>>, replace: bool) -> InsertResult<H, F, K, V, M>
+pub(super) fn insert<'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key + Into<K>, W: Into<V>, M: HasherBv<H, K>>(this: &'a Arc<LNode<K, V>>, key: L, value: W, key_flag: Option<Flag<H, F>>, replace: bool) -> InsertResult<'a, H, F, K, V, M>
 where
     K: HashLike<L>,
     K: PartialEq<L>,
     M: HasherBv<H, L>,
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
 {
-    match find(this, &key) {
-        FindResult::Found(key_value) => if replace {
+    match this.find(&key) {
+        FindResult::Found(k, v) => if replace {
             match remove_from_lnode(this, &key) {
-                LNodeRemoveResult::RemovedL(lnode, key_value) => InsertResult::InsertedL(LNode::new(key.into(), value.into(), LNodeNext::L(lnode)), key_value),
-                LNodeRemoveResult::RemovedS(snode, key_value) => InsertResult::InsertedL(LNode::new(key.into(), value.into(), LNodeNext::S(snode)), key_value),
+                LNodeRemoveResult::RemovedL(lnode, k, v) => InsertResult::InsertedL(LNode::new(key.into(), value.into(), LNodeNext::L(lnode)), k, v),
+                LNodeRemoveResult::RemovedS(snode, k, v) => InsertResult::InsertedL(LNode::new(key.into(), value.into(), LNodeNext::S(snode)), k, v),
                 LNodeRemoveResult::NotFound => panic!(),
             }
         }
         else {
-            InsertResult::Found(key_value)
+            InsertResult::Found(k, v)
         },
         FindResult::NotFound => lift_to_cnode_and_insert(LNodeNext::L(this.clone()), key, value, key_flag.unwrap())
     }
 }
 
-pub(super) fn remove<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, M: HasherBv<H, K>>(this: &Arc<LNode<K, V>>, key: &L) -> RemoveResult<H, F, K, V, M> where K: PartialEq<L> {
+pub(super) fn remove<'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, M: HasherBv<H, K>>(this: &'a Arc<LNode<K, V>>, key: &L) -> RemoveResult<'a, H, F, K, V, M> where K: PartialEq<L> {
     match remove_from_lnode(this, key) {
         LNodeRemoveResult::NotFound => RemoveResult::NotFound,
-        LNodeRemoveResult::RemovedL(lnode, key_value) => RemoveResult::RemovedL(lnode, key_value),
-        LNodeRemoveResult::RemovedS(snode, key_value) => RemoveResult::RemovedS(snode, key_value),
+        LNodeRemoveResult::RemovedL(lnode, key, value) => RemoveResult::RemovedL(lnode, key, value),
+        LNodeRemoveResult::RemovedS(snode, key, value) => RemoveResult::RemovedS(snode, key, value),
     }
 }
 
-fn remove_from_lnode<K: Key, V: Value, L: Key>(this: &Arc<LNode<K, V>>, key: &L) -> LNodeRemoveResult<K, V> where K: PartialEq<L> {
+fn remove_from_lnode<'a, K: Key, V: Value, L: Key>(this: &'a Arc<LNode<K, V>>, key: &L) -> LNodeRemoveResult<'a, K, V> where K: PartialEq<L> {
     if this.key == *key {
         match &this.next {
-            LNodeNext::L(lnode) => LNodeRemoveResult::RemovedL(lnode.clone(), this.clone().into()),
-            LNodeNext::S(snode) => LNodeRemoveResult::RemovedS(snode.clone(), this.clone().into()),
+            LNodeNext::L(lnode) => LNodeRemoveResult::RemovedL(lnode.clone(), this.key(), this.value()),
+            LNodeNext::S(snode) => LNodeRemoveResult::RemovedS(snode.clone(), this.key(), this.value()),
         }
     }
     else {
         match &this.next {
             LNodeNext::L(lnode) => match remove_from_lnode(lnode, key) {
                 LNodeRemoveResult::NotFound => LNodeRemoveResult::NotFound,
-                LNodeRemoveResult::RemovedL(lnode, key_value) => LNodeRemoveResult::RemovedL(LNode::new(this.key.clone(), this.value.clone(), LNodeNext::L(lnode)), key_value),
-                LNodeRemoveResult::RemovedS(snode, key_value) => LNodeRemoveResult::RemovedL(LNode::new(this.key.clone(), this.value.clone(), LNodeNext::S(snode)), key_value),
+                LNodeRemoveResult::RemovedL(lnode, key, value) => LNodeRemoveResult::RemovedL(LNode::new(this.key.clone(), this.value.clone(), LNodeNext::L(lnode)), key, value),
+                LNodeRemoveResult::RemovedS(snode, key, value) => LNodeRemoveResult::RemovedL(LNode::new(this.key.clone(), this.value.clone(), LNodeNext::S(snode)), key, value),
             },
             LNodeNext::S(snode) => match snode::remove(snode, key) {
                 SNodeRemoveResult::NotFound => LNodeRemoveResult::NotFound,
-                SNodeRemoveResult::RemovedZ(key_value) => LNodeRemoveResult::RemovedS(SNode::new(this.key.clone(), this.value.clone()), key_value),
+                SNodeRemoveResult::RemovedZ(key, value) => LNodeRemoveResult::RemovedS(SNode::new(this.key.clone(), this.value.clone()), key, value),
             }
         }
     }
@@ -410,7 +394,7 @@ where
 }
 
 #[must_use]
-pub(super) fn lift_to_cnode_and_insert<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key + Into<K>, W: Into<V>, M: HasherBv<H, K>>(this: LNodeNext<K, V>, key: L, value: W, key_flag: Flag<H, F>) -> InsertResult<H, F, K, V, M>
+pub(super) fn lift_to_cnode_and_insert<'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key + Into<K>, W: Into<V>, M: HasherBv<H, K>>(this: LNodeNext<K, V>, key: L, value: W, key_flag: Flag<H, F>) -> InsertResult<'a, H, F, K, V, M>
 where
     K: HashLike<L>,
     K: PartialEq<L>,
@@ -420,13 +404,13 @@ where
     let this_hash = M::default().hash(&key);
     if this_hash == key_flag.hash_value() {
         let lnode = LNode::new(key.into(), value.into(), this);
-        InsertResult::InsertedL(lnode.clone(), lnode.into())
+        InsertResult::InsertedL(lnode.clone(), lnode.key(), lnode.value())
     }
     else {
         let this_flag = Flag::new_at_depth(this_hash, key_flag.depth()).unwrap();
 
         let snode = SNode::new(key.into(), value.into());
-        InsertResult::InsertedC(cnode::lift_to_cnode_and_insert(this.into(), this_flag, snode.clone().into(), key_flag), snode.into())
+        InsertResult::InsertedC(cnode::lift_to_cnode_and_insert(this.into(), this_flag, snode.clone().into(), key_flag), snode.key(), snode.value())
     }
 }
 
@@ -457,10 +441,10 @@ mod tests {
     fn lnode_insert_3() {
         let node = lnode!((3, ()), (2, ()), (1, ()));
         assert_eq!(node.size, 3);
-        assert_found_eq!(find(&node, &1), (1, ()));
-        assert_found_eq!(find(&node, &2), (2, ()));
-        assert_found_eq!(find(&node, &3), (3, ()));
-        assert_found_none!(find(&node, &4));
+        assert_found_eq!(node.find(&1), (1, ()));
+        assert_found_eq!(node.find(&2), (2, ()));
+        assert_found_eq!(node.find(&3), (3, ()));
+        assert_found_none!(node.find(&4));
     }
 
 }

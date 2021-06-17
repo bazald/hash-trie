@@ -82,24 +82,24 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
     }
 
     /// Search the HashTrieSet for the given key and return a reference if found, or `HashTrieError::NotFound` if not found.
-    pub fn find<L: Key + HashLike<K>>(&self, key: &L) -> Result<KeyRef<K, Zst>, HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L> {
-        self.set.find(key).map(|key_value| key_value.into())
+    pub fn find<'a, L: Key + HashLike<K>>(&'a self, key: &L) -> Result<&'a K, HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L> {
+        self.set.find(key).map(|(key, _value)| key)
     }
 
     /// Search the HashTrieSet for the spot to insert the key and return both a mutated set and, if applicable, a reference to the replaced key.
     /// If found and replacement is disabled, a reference to the existing key is returned.
-    pub fn insert<L: Key + HashLike<K> + Into<K>>(&self, key: L, replace: bool) -> Result<(Self, KeyRef<K, Zst>), KeyRef<K, Zst>>
+    pub fn insert<'a, L: Key + HashLike<K> + Into<K>>(&'a self, key: L, replace: bool) -> Result<(Self, *const K), &'a K>
     where
         K: HashLike<L>,
         K: PartialEq<L>,
         M: HasherBv<H, L>
     {
-        self.set.insert(key, Zst{}, replace).map(|(set, key_value)| (Self {set}, key_value.into())).map_err(|key_value| key_value.into())
+        self.set.insert(key, Zst{}, replace).map(|(set, key, _value)| (Self {set}, key)).map_err(|(key, _value)| key)
     }
 
     /// Search the HashTrieSet for the given key to remove and return a mutated set, or `HashTrieError::NotFound` if not found.
-    pub fn remove<L: Key + HashLike<K>>(&self, key: &L) -> Result<(Self, KeyRef<K, Zst>), HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L> {
-        self.set.remove(key).map(|(set, key_value)| (Self {set}, key_value.into()))
+    pub fn remove<'a, L: Key + HashLike<K>>(&'a self, key: &L) -> Result<(Self, &'a K), HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L> {
+        self.set.remove(key).map(|(set, key, _value)| (Self {set}, key))
     }
 
     /// Run an operation on each entry in the set.

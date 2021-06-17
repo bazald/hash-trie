@@ -84,25 +84,25 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     /// Search the HashTrieMap for the given key and return references if found, or `HashTrieError::NotFound` if not found.
-    pub fn find<L: Key + HashLike<K>>(&self, key: &L) -> Result<KeyValueRef<K, V>, HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L> {
+    pub fn find<'a, L: Key + HashLike<K>>(&'a self, key: &L) -> Result<(&'a K, &'a V), HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L> {
         self.set.find(key)
     }
 
     /// Search the HashTrieMap for the spot to insert the key and return both a mutated map and, if applicable, references to the replaced values.
     /// If found and replacement is disabled, references to the existing values are returned.
     #[allow(clippy::type_complexity)]
-    pub fn insert<L: Key + HashLike<K> + Into<K>, W: Into<V>>(&self, key: L, value: W, replace: bool) -> Result<(Self, KeyValueRef<K, V>), KeyValueRef<K, V>>
+    pub fn insert<'a, L: Key + HashLike<K> + Into<K>, W: Into<V>>(&'a self, key: L, value: W, replace: bool) -> Result<(Self, *const K, *const V), (&'a K, &'a V)>
     where
         K: HashLike<L>,
         K: PartialEq<L>,
         M: HasherBv<H, L>
     {
-        self.set.insert(key, value, replace).map(|(set, reference)| (Self {set}, reference))
+        self.set.insert(key, value, replace).map(|(set, key, value)| (Self {set}, key, value))
     }
 
     /// Search the HashTrieMap for the given key to remove and return a mutated map, or `HashTrieError::NotFound` if not found.
-    pub fn remove<L: Key + HashLike<K>>(&self, key: &L) -> Result<(Self, KeyValueRef<K, V>), HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L> {
-        self.set.remove(key).map(|(set, reference)| (Self {set}, reference))
+    pub fn remove<'a, L: Key + HashLike<K>>(&'a self, key: &L) -> Result<(Self, &'a K, &'a V), HashTrieError> where K: PartialEq<L>, M: HasherBv<H, L> {
+        self.set.remove(key).map(|(set, key, value)| (Self {set}, key, value))
     }
 
     /// Run an operation on each entry in the map.
@@ -159,8 +159,8 @@ mod tests {
 
         for i in 1..101 {
             map.find(&i).unwrap();
-            assert_eq!(i * i, *squared.find(&i).unwrap().value());
-            assert_eq!(i * i, *tsquared.0.find(&i).unwrap().value());
+            assert_eq!(i * i, *squared.find(&i).unwrap().0);
+            assert_eq!(i * i, *tsquared.0.find(&i).unwrap().1);
         }
     }
     

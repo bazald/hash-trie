@@ -1,5 +1,5 @@
 use crate::{flag::*, result::*, traits::*};
-use super::{cnode::self, lnode::{self, *}, mnode::*};
+use super::{cnode::{self}, lnode::{self, *}, mnode::*};
 use alloc::{fmt::Debug, sync::Arc};
 
 #[derive(Clone, Debug)]
@@ -28,15 +28,15 @@ impl <K: Key, V: Value> SNode<K, V> {
         op(&self.key, &self.value);
     }
 
-}
-
-pub(super) fn find<K: Key, V: Value, L: Key>(this: &Arc<SNode<K, V>>, key: &L) -> FindResult<K, V> where K: PartialEq<L> {
-    if this.key == *key {
-        FindResult::Found(this.clone().into())
+    pub(super) fn find<'a, L: Key>(&'a self, key: &L) -> FindResult<'a, K, V> where K: PartialEq<L> {
+        if self.key == *key {
+            FindResult::Found(&self.key, &self.value)
+        }
+        else {
+            FindResult::NotFound
+        }
     }
-    else {
-        FindResult::NotFound
-    }
+    
 }
 
 pub(super) fn insert<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key + Into<K>, W: Into<V>, M: HasherBv<H, K>>(this: &Arc<SNode<K, V>>, key: L, value: W, key_flag: Option<Flag<H, F>>, replace: bool) -> InsertResult<H, F, K, V, M>
@@ -49,10 +49,10 @@ where
     if this.key == key {
         if replace {
             let snode = SNode::new(key.into(), value.into());
-            InsertResult::InsertedS(snode.clone(), snode.into())
+            InsertResult::InsertedS(snode.clone(), snode.key(), snode.value())
         }
         else {
-            InsertResult::Found(this.clone().into())
+            InsertResult::Found(this.key(), this.value())
         }
     }
     else {
@@ -60,9 +60,9 @@ where
     }
 }
 
-pub(super) fn remove<K: Key, V: Value, L: Key>(this: &Arc<SNode<K, V>>, key: &L) -> SNodeRemoveResult<K, V> where K: PartialEq<L> {
+pub(super) fn remove<'a, K: Key, V: Value, L: Key>(this: &'a Arc<SNode<K, V>>, key: &L) -> SNodeRemoveResult<'a, K, V> where K: PartialEq<L> {
     if this.key == *key {
-        SNodeRemoveResult::RemovedZ(this.clone().into())
+        SNodeRemoveResult::RemovedZ(this.key(), this.value())
     }
     else {
         SNodeRemoveResult::NotFound

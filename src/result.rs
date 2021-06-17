@@ -1,4 +1,4 @@
-use crate::{node::{CNode, LNode, LNodeNext, SNode}, traits::*, *};
+use crate::{node::{CNode, LNode, SNode}, traits::*, *};
 use alloc::sync::Arc;
 
 /// `BitError` enumerates possible error conditions when bitops are used "incorrectly."
@@ -22,113 +22,57 @@ pub enum HashTrieError {
     NotFound,
 }
 
-#[derive(Clone, Debug)]
-pub struct KeyRef<K: Key, V: Value> {
-    lsnode: LNodeNext<K, V>,
-}
-
-impl <K: Key, V: Value> KeyRef<K, V> {
-    pub(crate) fn new(lsnode: LNodeNext<K, V>) -> Self {
-        Self {
-            lsnode
-        }
-    }
-
-    pub fn get(&self) -> &K {
-        self.lsnode.key()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct KeyValueRef<K: Key, V: Value> {
-    lsnode: LNodeNext<K, V>,
-}
-
-impl <K: Key, V: Value> KeyValueRef<K, V> {
-    pub(crate) fn new(lsnode: LNodeNext<K, V>) -> Self {
-        Self {
-            lsnode
-        }
-    }
-
-    pub fn key(&self) -> &K {
-        self.lsnode.key()
-    }
-
-    pub fn value(&self) -> &V {
-        self.lsnode.value()
-    }
-}
-
-impl <K: Key, V: Value> From<KeyValueRef<K, V>> for KeyRef<K, V> {
-    fn from(other: KeyValueRef<K, V>) -> Self {
-        KeyRef::new(other.lsnode)
-    }
-}
-
-impl <K: Key, V: Value> From<Arc<LNode<K, V>>> for KeyValueRef<K, V> {
-    fn from(other: Arc<LNode<K, V>>) -> Self {
-        KeyValueRef::new(LNodeNext::L(other))
-    }
-}
-
-impl <K: Key, V: Value> From<Arc<SNode<K, V>>> for KeyValueRef<K, V> {
-    fn from(other: Arc<SNode<K, V>>) -> Self {
-        KeyValueRef::new(LNodeNext::S(other))
-    }
-}
-
 #[must_use]
-pub(crate) enum FindResult<K: Key, V: Value> {
+pub(crate) enum FindResult<'a, K: Key, V: Value> {
     NotFound,
-    Found(KeyValueRef<K, V>),
+    Found(&'a K, &'a V),
 }
 
 #[must_use]
-pub(crate) enum InsertResult<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> {
-    Found(KeyValueRef<K, V>),
-    InsertedC(CNode<H, F, K, V, M>, KeyValueRef<K, V>),
-    InsertedL(Arc<LNode<K, V>>, KeyValueRef<K, V>),
-    InsertedS(Arc<SNode<K, V>>, KeyValueRef<K, V>),
+pub(crate) enum InsertResult<'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> {
+    Found(&'a K, &'a V),
+    InsertedC(CNode<H, F, K, V, M>, *const K, *const V),
+    InsertedL(Arc<LNode<K, V>>, *const K, *const V),
+    InsertedS(Arc<SNode<K, V>>, *const K, *const V),
 }
 
 #[must_use]
-pub(crate) enum RemoveResult<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> {
+pub(crate) enum RemoveResult<'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> {
     NotFound,
-    RemovedC(CNode<H, F, K, V, M>, KeyValueRef<K, V>),
-    RemovedL(Arc<LNode<K, V>>, KeyValueRef<K, V>),
-    RemovedS(Arc<SNode<K, V>>, KeyValueRef<K, V>),
-    RemovedZ(KeyValueRef<K, V>),
+    RemovedC(CNode<H, F, K, V, M>, &'a K, &'a V),
+    RemovedL(Arc<LNode<K, V>>, &'a K, &'a V),
+    RemovedS(Arc<SNode<K, V>>, &'a K, &'a V),
+    RemovedZ(&'a K, &'a V),
 }
 
 #[must_use]
-pub(crate) enum LNodeRemoveResult<K: Key, V: Value> {
+pub(crate) enum LNodeRemoveResult<'a, K: Key, V: Value> {
     NotFound,
-    RemovedL(Arc<LNode<K, V>>, KeyValueRef<K, V>),
-    RemovedS(Arc<SNode<K, V>>, KeyValueRef<K, V>),
+    RemovedL(Arc<LNode<K, V>>, &'a K, &'a V),
+    RemovedS(Arc<SNode<K, V>>, &'a K, &'a V),
 }
 
-impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> From<LNodeRemoveResult<K, V>> for RemoveResult<H, F, K, V, M> {
-    fn from(other: LNodeRemoveResult<K, V>) -> Self {
+impl <'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> From<LNodeRemoveResult<'a, K, V>> for RemoveResult<'a, H, F, K, V, M> {
+    fn from(other: LNodeRemoveResult<'a, K, V>) -> Self {
         match other {
             LNodeRemoveResult::NotFound => RemoveResult::NotFound,
-            LNodeRemoveResult::RemovedL(lnode, key_value) => RemoveResult::RemovedL(lnode, key_value),
-            LNodeRemoveResult::RemovedS(snode, key_value) => RemoveResult::RemovedS(snode, key_value),
+            LNodeRemoveResult::RemovedL(lnode, key, value) => RemoveResult::RemovedL(lnode, key, value),
+            LNodeRemoveResult::RemovedS(snode, key, value) => RemoveResult::RemovedS(snode, key, value),
         }
     }
 }
 
 #[must_use]
-pub(crate) enum SNodeRemoveResult<K: Key, V: Value> {
+pub(crate) enum SNodeRemoveResult<'a, K: Key, V: Value> {
     NotFound,
-    RemovedZ(KeyValueRef<K, V>),
+    RemovedZ(&'a K, &'a V),
 }
 
-impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> From<SNodeRemoveResult<K, V>> for RemoveResult<H, F, K, V, M> {
-    fn from(other: SNodeRemoveResult<K, V>) -> Self {
+impl <'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> From<SNodeRemoveResult<'a, K, V>> for RemoveResult<'a, H, F, K, V, M> {
+    fn from(other: SNodeRemoveResult<'a, K, V>) -> Self {
         match other {
             SNodeRemoveResult::NotFound => RemoveResult::NotFound,
-            SNodeRemoveResult::RemovedZ(key_value) => RemoveResult::RemovedZ(key_value),
+            SNodeRemoveResult::RemovedZ(key, value) => RemoveResult::RemovedZ(key, value),
         }
     }
 }
@@ -231,9 +175,9 @@ impl <K: Key, V: Value, ReduceT> From<MapTransformResult<K, V, ReduceT>> for SNo
 macro_rules! assert_found_eq {
     ( $found:expr, $expected:expr ) => {
         match $found {
-            FindResult::Found(key_value) => {
-                assert_eq!(*key_value.key(), $expected.0);
-                assert_eq!(*key_value.value(), $expected.1);
+            FindResult::Found(key, value) => {
+                assert_eq!(*key, $expected.0);
+                assert_eq!(*value, $expected.1);
             },
             FindResult::NotFound => panic!()
         }
@@ -244,7 +188,7 @@ macro_rules! assert_found_eq {
 macro_rules! assert_found_none {
     ( $found:expr ) => {
         match $found {
-            FindResult::Found(_key_value) => panic!(),
+            FindResult::Found(_key, _value) => panic!(),
             FindResult::NotFound => {}
         }
     };

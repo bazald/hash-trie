@@ -24,9 +24,6 @@ pub struct Zst {}
 pub use result::BitError as BitError;
 pub use result::HashTrieError as HashTrieError;
 
-pub use result::KeyRef as KeyRef;
-pub use result::KeyValueRef as KeyValueRef;
-
 pub use result::SetTransformResult as SetTransformResult;
 pub use result::MapTransformResult as MapTransformResult;
 

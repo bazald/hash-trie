@@ -135,7 +135,7 @@ fn hash_trie_map() -> u128 {
     let t2 = SystemTime::now();
 
     for v in removals {
-        if let Ok((ht, _found_key_value)) = hash_trie.remove(&v) {
+        if let Ok((ht, _key, _value)) = hash_trie.remove(&v) {
             hash_trie = ht;
         }
     }

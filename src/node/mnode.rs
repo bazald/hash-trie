@@ -25,8 +25,8 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> MNode<H,
     {
         match self {
             Self::C(cnode) => cnode.find(key, flag),
-            Self::L(lnode) => lnode::find(lnode, key),
-            Self::S(snode) => snode::find(snode, key),
+            Self::L(lnode) => lnode.find(key),
+            Self::S(snode) => snode.find(key),
         }
     }
 
