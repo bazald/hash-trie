@@ -65,14 +65,14 @@ use alloc::fmt::Debug;
 #[derive(Clone, Debug)]
 #[must_use]
 pub struct HashTrieSet <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
-    set: HashTrie<H, F, K, Zst, M>,
+    set: HashTrie<H, F, K, (), M>,
 }
 
 impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, K, M> where <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
     /// Get a new, empty HashTrieSet.
     pub fn new() -> Self {
         Self {
-            set: HashTrie::<H, F, K, Zst, M>::new()
+            set: HashTrie::<H, F, K, (), M>::new()
         }
     }
 
@@ -94,7 +94,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         K: PartialEq<L>,
         M: HasherBv<H, L>
     {
-        self.set.insert(key, Zst{}, replace).map(|(set, key, _value)| (Self {set}, key)).map_err(|(key, _value)| key)
+        self.set.insert(key, (), replace).map(|(set, key, _value)| (Self {set}, key)).map_err(|(key, _value)| key)
     }
 
     /// Search the HashTrieSet for the given key to remove and return a mutated set, or `HashTrieError::NotFound` if not found.
@@ -120,7 +120,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         M: HasherBv<H, S>,
     {
         let (set, reduced) = self.set.transform(reduce_op, |key, _value| match op(key) {
-            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, Zst{}, reduced),
+            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, (), reduced),
             SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
         });
         (HashTrieSet::<H, F, S, M>{set}, reduced)
@@ -148,13 +148,13 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         M: HasherBv<H, S>,
     {
         let (set, reduced) = self.set.joint_transform(&right.set, reduce_op, |l,_,r,_| match both_op(l, r) {
-            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, Zst{}, reduced),
+            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, (), reduced),
             SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
         }, |l,_| match left_op(l) {
-            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, Zst{}, reduced),
+            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, (), reduced),
             SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
         }, |r,_| match right_op(r) {
-            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, Zst{}, reduced),
+            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, (), reduced),
             SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
         });
         (HashTrieSet::<H, F, S, M>{set}, reduced)

@@ -18,9 +18,6 @@ mod node;
 mod set;
 pub mod traits;
 
-#[derive(Clone, Debug)]
-pub struct Zst {}
-
 pub use result::BitError as BitError;
 pub use result::HashTrieError as HashTrieError;
 

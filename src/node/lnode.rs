@@ -404,13 +404,17 @@ where
     let this_hash = M::default().hash(&key);
     if this_hash == key_flag.hash_value() {
         let lnode = LNode::new(key.into(), value.into(), this);
-        InsertResult::InsertedL(lnode.clone(), lnode.key(), lnode.value())
+        let key: *const K = lnode.key();
+        let value: *const V = lnode.value();
+        InsertResult::InsertedL(lnode, key, value)
     }
     else {
         let this_flag = Flag::new_at_depth(this_hash, key_flag.depth()).unwrap();
 
         let snode = SNode::new(key.into(), value.into());
-        InsertResult::InsertedC(cnode::lift_to_cnode_and_insert(this.into(), this_flag, snode.clone().into(), key_flag), snode.key(), snode.value())
+        let key: *const K = snode.key();
+        let value: *const V = snode.value();
+        InsertResult::InsertedC(cnode::lift_to_cnode_and_insert(this.into(), this_flag, snode.into(), key_flag), key, value)
     }
 }
 

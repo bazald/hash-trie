@@ -102,7 +102,9 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> CNode<H,
             },
             Err(_) => {
                 let snode = SNode::new(key.into(), value.into());
-                InsertResult::InsertedC(Self::new(self.nodes.inserted(flag.unwrap().flag, Cow::Owned(MNode::S(snode.clone())), Cow::Owned(self.size() + 1)).unwrap()), snode.key(), snode.value())
+                let key: *const K = snode.key();
+                let value: *const V = snode.value();
+                InsertResult::InsertedC(Self::new(self.nodes.inserted(flag.unwrap().flag, Cow::Owned(MNode::S(snode)), Cow::Owned(self.size() + 1)).unwrap()), key, value)
             }
         }
     }

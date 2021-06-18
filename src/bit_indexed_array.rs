@@ -502,21 +502,18 @@ mod tests {
     use super::*;
     use std::println;
 
-    #[derive(Clone, Debug, Default, Eq, PartialEq)]
-    struct Zst {}
-    
     #[test]
     fn bit_indexed_array_sizes_differ() {
-        assert!(mem::size_of::<BitIndexedArrayImpl::<u64,usize,Zst,0>>() < mem::size_of::<BitIndexedArrayImpl::<u64,usize,Zst,1>>());
-        assert!(mem::size_of::<BitIndexedArrayImpl::<u64,usize,Zst,1>>() < mem::size_of::<BitIndexedArrayImpl::<u64,usize,Zst,2>>());
-        assert!(mem::size_of::<BitIndexedArrayImpl::<u64,usize,Zst,126>>() < mem::size_of::<BitIndexedArrayImpl::<u64,usize,Zst,127>>());
-        assert!(mem::size_of::<BitIndexedArrayImpl::<u64,usize,Zst,127>>() < mem::size_of::<BitIndexedArrayImpl::<u64,usize,Zst,128>>());
+        assert!(mem::size_of::<BitIndexedArrayImpl::<u64,usize,(),0>>() < mem::size_of::<BitIndexedArrayImpl::<u64,usize,(),1>>());
+        assert!(mem::size_of::<BitIndexedArrayImpl::<u64,usize,(),1>>() < mem::size_of::<BitIndexedArrayImpl::<u64,usize,(),2>>());
+        assert!(mem::size_of::<BitIndexedArrayImpl::<u64,usize,(),126>>() < mem::size_of::<BitIndexedArrayImpl::<u64,usize,(),127>>());
+        assert!(mem::size_of::<BitIndexedArrayImpl::<u64,usize,(),127>>() < mem::size_of::<BitIndexedArrayImpl::<u64,usize,(),128>>());
     }
     
     #[test]
     fn bit_indexed_array_insert() {
-        let mut bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), Zst{}).unwrap();
-        bia = bia.as_ref().inserted(0b10, Cow::Owned(3), Cow::Owned(Zst{})).unwrap();
+        let mut bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), ()).unwrap();
+        bia = bia.as_ref().inserted(0b10, Cow::Owned(3), Cow::Owned(())).unwrap();
         assert_eq!(bia.as_ref().len(), 3);
         assert_eq!(*bia.as_ref().at_bit_index(0).unwrap(), 13);
         assert_eq!(*bia.as_ref().at_bit_index(1).unwrap(), 3);
@@ -531,20 +528,20 @@ mod tests {
 
     #[test]
     fn bit_indexed_array_insert_reinsert_failure() {
-        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), Zst{}).unwrap();
-        assert!(bia.as_ref().inserted(0b100, Cow::Owned(3), Cow::Owned(Zst{})).is_err());
+        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), ()).unwrap();
+        assert!(bia.as_ref().inserted(0b100, Cow::Owned(3), Cow::Owned(())).is_err());
     }
 
     #[test]
     fn bit_indexed_array_insert_multibit_failure() {
-        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), Zst{}).unwrap();
-        assert!(bia.as_ref().inserted(0b1010, Cow::Owned(3), Cow::Owned(Zst{})).is_err());
+        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), ()).unwrap();
+        assert!(bia.as_ref().inserted(0b1010, Cow::Owned(3), Cow::Owned(())).is_err());
     }
 
     #[test]
     fn bit_indexed_array_update() {
-        let mut bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), Zst{}).unwrap();
-        bia = bia.as_ref().updated(0b1000, Cow::Owned(11), Cow::Owned(Zst{})).unwrap();
+        let mut bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), ()).unwrap();
+        bia = bia.as_ref().updated(0b1000, Cow::Owned(11), Cow::Owned(())).unwrap();
         assert_eq!(bia.as_ref().len(), 3);
         assert_eq!(*bia.as_ref().at_bit_index(0).unwrap(), 13);
         assert!(bia.as_ref().at_bit_index(1).is_err());
@@ -561,20 +558,20 @@ mod tests {
 
     #[test]
     fn bit_indexed_array_update_absent_failure() {
-        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), Zst{}).unwrap();
-        assert!(bia.as_ref().updated(0b10, Cow::Owned(3), Cow::Owned(Zst{})).is_err());
+        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), ()).unwrap();
+        assert!(bia.as_ref().updated(0b10, Cow::Owned(3), Cow::Owned(())).is_err());
     }
 
     #[test]
     fn bit_indexed_array_update_multibit_failure() {
-        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), Zst{}).unwrap();
-        assert!(bia.as_ref().updated(0b101, Cow::Owned(3), Cow::Owned(Zst{})).is_err());
+        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), ()).unwrap();
+        assert!(bia.as_ref().updated(0b101, Cow::Owned(3), Cow::Owned(())).is_err());
     }
 
     #[test]
     fn bit_indexed_array_update_index() {
-        let mut bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), Zst{}).unwrap();
-        bia = bia.as_ref().updated_bit_index(2, Cow::Owned(11), Cow::Owned(Zst{})).unwrap();
+        let mut bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), ()).unwrap();
+        bia = bia.as_ref().updated_bit_index(2, Cow::Owned(11), Cow::Owned(())).unwrap();
         assert_eq!(bia.as_ref().len(), 3);
         assert_eq!(*bia.as_ref().at_bit_index(0).unwrap(), 13);
         assert!(bia.as_ref().at_bit_index(1).is_err());
@@ -591,14 +588,14 @@ mod tests {
 
     #[test]
     fn bit_indexed_array_update_absent_index_failure() {
-        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), Zst{}).unwrap();
-        assert!(bia.as_ref().updated_bit_index(1, Cow::Owned(3), Cow::Owned(Zst{})).is_err());
+        let bia = new_bit_indexed_array(0b101_u64, BitIndexedArrayVec::new(&[13, 42]), ()).unwrap();
+        assert!(bia.as_ref().updated_bit_index(1, Cow::Owned(3), Cow::Owned(())).is_err());
     }
 
     #[test]
     fn bit_indexed_array_remove() {
-        let mut bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), Zst{}).unwrap();
-        bia = bia.as_ref().removed(0b1000, Cow::Owned(Zst{})).unwrap();
+        let mut bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), ()).unwrap();
+        bia = bia.as_ref().removed(0b1000, Cow::Owned(())).unwrap();
         assert_eq!(bia.as_ref().len(), 2);
         assert_eq!(*bia.as_ref().at_bit_index(0).unwrap(), 13);
         assert!(bia.as_ref().at_bit_index(1).is_err());
@@ -614,14 +611,14 @@ mod tests {
 
     #[test]
     fn bit_indexed_array_remove_absent_failure() {
-        let bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), Zst{}).unwrap();
-        assert!(bia.as_ref().removed(0b10, Cow::Owned(Zst{})).is_err());
+        let bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), ()).unwrap();
+        assert!(bia.as_ref().removed(0b10, Cow::Owned(())).is_err());
     }
 
     #[test]
     fn bit_indexed_array_remove_multibit_failure() {
-        let bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), Zst{}).unwrap();
-        assert!(bia.as_ref().removed(0b101, Cow::Owned(Zst{})).is_err());
+        let bia = new_bit_indexed_array(0b1101_u64, BitIndexedArrayVec::new(&[13, 42, 8]), ()).unwrap();
+        assert!(bia.as_ref().removed(0b101, Cow::Owned(())).is_err());
     }
 
 }

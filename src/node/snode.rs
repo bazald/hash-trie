@@ -49,7 +49,9 @@ where
     if this.key == key {
         if replace {
             let snode = SNode::new(key.into(), value.into());
-            InsertResult::InsertedS(snode.clone(), snode.key(), snode.value())
+            let key: *const K = snode.key();
+            let value: *const V = snode.value();
+            InsertResult::InsertedS(snode, key, value)
         }
         else {
             InsertResult::Found(this.key(), this.value())
