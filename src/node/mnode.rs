@@ -37,8 +37,8 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> MNode<H,
         M: HasherBv<H, L>,
     {
         match self {
-            Self::C(cnode) => cnode.insert(key, value, flag, replace),
-            Self::L(lnode) => lnode::insert(&lnode, key, value, flag, replace),
+            Self::C(cnode) => cnode.insert(key, value, flag, replace).into(),
+            Self::L(lnode) => lnode::insert(&lnode, key, value, flag, replace).into(),
             Self::S(snode) => snode::insert(&snode, key, value, flag, replace),
         }
     }

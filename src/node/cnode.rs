@@ -22,7 +22,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> CNode<H,
     pub(super) fn find<'a, L: Key>(&'a self, key: &L, flag: Option<Flag<H, F>>) -> FindResult<'a, K, V> where K: PartialEq<L>, <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug {
         match self.nodes.at(flag.as_ref().unwrap().flag.clone()) {
             Ok(node) => match node {
-                MNode::C(cnode) => cnode.find(key, match flag {Some(flag) => flag.next(), None => None}),
+                MNode::C(cnode) => cnode.find(key, flag.unwrap().next()),
                 MNode::L(lnode) => lnode.find(key),
                 MNode::S(snode) => snode.find(key),
             },
@@ -72,7 +72,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> CNode<H,
 }
 
 impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> CNode<H, F, K, V, M> {
-    pub(super) fn insert<'a, L: Key + Into<K>, W: Into<V>>(&'a self, key: L, value: W, flag: Option<Flag<H, F>>, replace: bool) -> InsertResult<'a, H, F, K, V, M>
+    pub(super) fn insert<'a, L: Key + Into<K>, W: Into<V>>(&'a self, key: L, value: W, flag: Option<Flag<H, F>>, replace: bool) -> LNodeInsertResult<'a, H, F, K, V, M>
     where
         K: HashLike<L>,
         K: PartialEq<L>,
@@ -82,29 +82,30 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> CNode<H,
         match self.nodes.at(flag.as_ref().unwrap().flag.clone()) {
             Ok(node) => match node {
                 MNode::C(cnode) => match cnode.insert(key, value, flag.as_ref().unwrap().next(), replace) {
-                    InsertResult::Found(key, value) => InsertResult::Found(key, value),
-                    InsertResult::InsertedC(cnode, key, value) => InsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::C(cnode)), Cow::Owned(self.size() + 1)).unwrap()), key, value),
-                    InsertResult::InsertedL(lnode, key, value) => InsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::L(lnode)), Cow::Owned(self.size() + 1)).unwrap()), key, value),
-                    InsertResult::InsertedS(_snode, _key, _value) => panic!(),
+                    LNodeInsertResult::Found(key, value) => LNodeInsertResult::Found(key, value),
+                    LNodeInsertResult::InsertedC(cnode, key, value) => LNodeInsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::C(cnode)), Cow::Owned(self.size() + 1)).unwrap()), key, value),
+                    LNodeInsertResult::InsertedL(lnode, key, value) => LNodeInsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::L(lnode)), Cow::Owned(self.size() + 1)).unwrap()), key, value),
                 },
                 MNode::L(lnode) => match lnode::insert(&lnode, key, value, flag.as_ref().unwrap().next(), replace) {
-                    InsertResult::Found(key, value) => InsertResult::Found(key, value),
-                    InsertResult::InsertedC(cnode, key, value) => InsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::C(cnode)), Cow::Owned(self.size() + 1)).unwrap()), key, value),
-                    InsertResult::InsertedL(lnode, key, value) => InsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::L(lnode)), Cow::Owned(self.size() + 1)).unwrap()), key, value),
-                    InsertResult::InsertedS(_snode, _key, _value) => panic!(),
+                    LNodeInsertResult::Found(key, value) => LNodeInsertResult::Found(key, value),
+                    LNodeInsertResult::InsertedC(cnode, key, value) => LNodeInsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::C(cnode)), Cow::Owned(self.size() + 1)).unwrap()), key, value),
+                    LNodeInsertResult::InsertedL(lnode2, key, value) => {
+                        let size = self.size() + lnode2.size() - lnode.size();
+                        LNodeInsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::L(lnode2)), Cow::Owned(size)).unwrap()), key, value)
+                    },
                 },
                 MNode::S(snode) => match snode::insert(&snode, key, value, flag.as_ref().unwrap().next(), replace) {
-                    InsertResult::Found(key, value) => InsertResult::Found(key, value),
-                    InsertResult::InsertedC(cnode, key, value) => InsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::C(cnode)), Cow::Owned(self.size() + 1)).unwrap()), key, value),
-                    InsertResult::InsertedL(lnode, key, value) => InsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::L(lnode)), Cow::Owned(self.size() + 1)).unwrap()), key, value),
-                    InsertResult::InsertedS(snode, key, value) => InsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::S(snode)), Cow::Owned(self.size() + 1)).unwrap()), key, value),
+                    InsertResult::Found(key, value) => LNodeInsertResult::Found(key, value),
+                    InsertResult::InsertedC(cnode, key, value) => LNodeInsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::C(cnode)), Cow::Owned(self.size() + 1)).unwrap()), key, value),
+                    InsertResult::InsertedL(lnode, key, value) => LNodeInsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::L(lnode)), Cow::Owned(self.size() + 1)).unwrap()), key, value),
+                    InsertResult::InsertedS(snode, key, value) => LNodeInsertResult::InsertedC(Self::new(self.nodes.updated(flag.unwrap().flag, Cow::Owned(MNode::S(snode)), Cow::Owned(self.size())).unwrap()), key, value),
                 },
             },
             Err(_) => {
                 let snode = SNode::new(key.into(), value.into());
                 let key: *const K = snode.key();
                 let value: *const V = snode.value();
-                InsertResult::InsertedC(Self::new(self.nodes.inserted(flag.unwrap().flag, Cow::Owned(MNode::S(snode)), Cow::Owned(self.size() + 1)).unwrap()), key, value)
+                LNodeInsertResult::InsertedC(Self::new(self.nodes.inserted(flag.unwrap().flag, Cow::Owned(MNode::S(snode)), Cow::Owned(self.size() + 1)).unwrap()), key, value)
             }
         }
     }

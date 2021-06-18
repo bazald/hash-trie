@@ -58,7 +58,7 @@ where
         }
     }
     else {
-        lnode::lift_to_cnode_and_insert(LNodeNext::S(this.clone()), key, value, key_flag.unwrap())
+        lnode::lift_to_cnode_and_insert(LNodeNext::S(this.clone()), key, value, key_flag.unwrap()).into()
     }
 }
 

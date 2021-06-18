@@ -37,6 +37,23 @@ pub(crate) enum InsertResult<'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, 
 }
 
 #[must_use]
+pub(crate) enum LNodeInsertResult<'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> {
+    Found(&'a K, &'a V),
+    InsertedC(CNode<H, F, K, V, M>, *const K, *const V),
+    InsertedL(Arc<LNode<K, V>>, *const K, *const V),
+}
+
+impl <'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> From<LNodeInsertResult<'a, H, F, K, V, M>> for InsertResult<'a, H, F, K, V, M> {
+    fn from(other: LNodeInsertResult<'a, H, F, K, V, M>) -> Self {
+        match other {
+            LNodeInsertResult::Found(key, value) => InsertResult::Found(key, value),
+            LNodeInsertResult::InsertedC(lnode, key, value) => InsertResult::InsertedC(lnode, key, value),
+            LNodeInsertResult::InsertedL(snode, key, value) => InsertResult::InsertedL(snode, key, value),
+        }
+    }
+}
+
+#[must_use]
 pub(crate) enum RemoveResult<'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> {
     NotFound,
     RemovedC(CNode<H, F, K, V, M>, &'a K, &'a V),

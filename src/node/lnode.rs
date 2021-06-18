@@ -8,6 +8,15 @@ pub(crate) enum LNodeNext<K: Key, V: Value> {
     S(Arc<SNode<K, V>>),
 }
 
+impl <K: Key, V: Value> LNodeNext<K, V> {
+    fn key(&self) -> &K {
+        match self {
+            LNodeNext::L(lnode) => lnode.key(),
+            LNodeNext::S(snode) => snode.key(),
+        }
+    }
+}
+
 impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> From<LNodeNext<K, V>> for MNode<H, F, K, V, M> {
     fn from(other: LNodeNext<K, V>) -> Self {
         match other {
@@ -77,7 +86,7 @@ impl<K: Key, V: Value> LNode<K, V> {
     
 }
 
-pub(super) fn insert<'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key + Into<K>, W: Into<V>, M: HasherBv<H, K>>(this: &'a Arc<LNode<K, V>>, key: L, value: W, key_flag: Option<Flag<H, F>>, replace: bool) -> InsertResult<'a, H, F, K, V, M>
+pub(super) fn insert<'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key + Into<K>, W: Into<V>, M: HasherBv<H, K>>(this: &'a Arc<LNode<K, V>>, key: L, value: W, key_flag: Option<Flag<H, F>>, replace: bool) -> LNodeInsertResult<'a, H, F, K, V, M>
 where
     K: HashLike<L>,
     K: PartialEq<L>,
@@ -87,13 +96,13 @@ where
     match this.find(&key) {
         FindResult::Found(k, v) => if replace {
             match remove_from_lnode(this, &key) {
-                LNodeRemoveResult::RemovedL(lnode, k, v) => InsertResult::InsertedL(LNode::new(key.into(), value.into(), LNodeNext::L(lnode)), k, v),
-                LNodeRemoveResult::RemovedS(snode, k, v) => InsertResult::InsertedL(LNode::new(key.into(), value.into(), LNodeNext::S(snode)), k, v),
+                LNodeRemoveResult::RemovedL(lnode, k, v) => LNodeInsertResult::InsertedL(LNode::new(key.into(), value.into(), LNodeNext::L(lnode)), k, v),
+                LNodeRemoveResult::RemovedS(snode, k, v) => LNodeInsertResult::InsertedL(LNode::new(key.into(), value.into(), LNodeNext::S(snode)), k, v),
                 LNodeRemoveResult::NotFound => panic!(),
             }
         }
         else {
-            InsertResult::Found(k, v)
+            LNodeInsertResult::Found(k, v)
         },
         FindResult::NotFound => lift_to_cnode_and_insert(LNodeNext::L(this.clone()), key, value, key_flag.unwrap())
     }
@@ -394,19 +403,19 @@ where
 }
 
 #[must_use]
-pub(super) fn lift_to_cnode_and_insert<'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key + Into<K>, W: Into<V>, M: HasherBv<H, K>>(this: LNodeNext<K, V>, key: L, value: W, key_flag: Flag<H, F>) -> InsertResult<'a, H, F, K, V, M>
+pub(super) fn lift_to_cnode_and_insert<'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key + Into<K>, W: Into<V>, M: HasherBv<H, K>>(this: LNodeNext<K, V>, key: L, value: W, key_flag: Flag<H, F>) -> LNodeInsertResult<'a, H, F, K, V, M>
 where
     K: HashLike<L>,
     K: PartialEq<L>,
     M: HasherBv<H, L>,
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
 {
-    let this_hash = M::default().hash(&key);
+    let this_hash = M::default().hash(this.key());
     if this_hash == key_flag.hash_value() {
         let lnode = LNode::new(key.into(), value.into(), this);
         let key: *const K = lnode.key();
         let value: *const V = lnode.value();
-        InsertResult::InsertedL(lnode, key, value)
+        LNodeInsertResult::InsertedL(lnode, key, value)
     }
     else {
         let this_flag = Flag::new_at_depth(this_hash, key_flag.depth()).unwrap();
@@ -414,7 +423,7 @@ where
         let snode = SNode::new(key.into(), value.into());
         let key: *const K = snode.key();
         let value: *const V = snode.value();
-        InsertResult::InsertedC(cnode::lift_to_cnode_and_insert(this.into(), this_flag, snode.into(), key_flag), key, value)
+        LNodeInsertResult::InsertedC(cnode::lift_to_cnode_and_insert(this.into(), this_flag, snode.into(), key_flag), key, value)
     }
 }
 
