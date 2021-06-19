@@ -51,7 +51,7 @@ where
             let snode = SNode::new(key.into(), value.into());
             let key: *const K = snode.key();
             let value: *const V = snode.value();
-            InsertResult::InsertedS(snode, key, value)
+            InsertResult::InsertedS(snode, key, value, Some((this.key(), this.value())))
         }
         else {
             InsertResult::Found(this.key(), this.value())
@@ -68,6 +68,18 @@ pub(super) fn remove<'a, K: Key, V: Value, L: Key>(this: &'a Arc<SNode<K, V>>, k
     }
     else {
         SNodeRemoveResult::NotFound
+    }
+}
+
+pub(super) fn transform<K: Key, V: Value, ReduceT, Op>(this: &Arc<SNode<K, V>>, op: Op) -> SNodeTransformResult<K, V, ReduceT>
+    where
+    ReduceT: Default,
+    Op: Fn(&K, &V) -> MapTransformResult<V, ReduceT>,
+{
+    match op(&this.key, &this.value) {
+        MapTransformResult::Unchanged(reduced) => SNodeTransformResult::Unchanged(reduced),
+        MapTransformResult::Transformed(value, reduced) => SNodeTransformResult::S(SNode::new(this.key.clone(), value), reduced),
+        MapTransformResult::Removed(reduced) => SNodeTransformResult::Removed(reduced),
     }
 }
 
@@ -101,9 +113,9 @@ where
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
 {
     match right {
-        MNode::<H, F, L, W, M>::C(cnode) => cnode::joint_transmute_snode(cnode, this, |a,b| reduce_op(b, a), |k,v,l,w| both_op(l, w, k, v), right_op, left_op, depth),
-        MNode::<H, F, L, W, M>::L(lnode) => lnode::joint_transmute_snode(lnode, this, |a,b| reduce_op(b, a), |k,v,l,w| both_op(l, w, k, v), right_op, left_op, depth),
-        MNode::<H, F, L, W, M>::S(snode) => joint_transmute_snode(this, snode, reduce_op, both_op, left_op, right_op, depth),
+        MNode::C(cnode) => cnode::joint_transmute_snode(cnode, this, |a,b| reduce_op(b, a), |k,v,l,w| both_op(l, w, k, v), right_op, left_op, depth),
+        MNode::L(lnode) => lnode::joint_transmute_snode(lnode, this, |a,b| reduce_op(b, a), |k,v,l,w| both_op(l, w, k, v), right_op, left_op, depth),
+        MNode::S(snode) => joint_transmute_snode(this, snode, reduce_op, both_op, left_op, right_op, depth),
     }
 }
 

@@ -96,8 +96,18 @@ where
     match this.find(&key) {
         FindResult::Found(k, v) => if replace {
             match remove_from_lnode(this, &key) {
-                LNodeRemoveResult::RemovedL(lnode, k, v) => LNodeInsertResult::InsertedL(LNode::new(key.into(), value.into(), LNodeNext::L(lnode)), k, v),
-                LNodeRemoveResult::RemovedS(snode, k, v) => LNodeInsertResult::InsertedL(LNode::new(key.into(), value.into(), LNodeNext::S(snode)), k, v),
+                LNodeRemoveResult::RemovedL(lnode, k, v) => {
+                    let lnode = LNode::new(key.into(), value.into(), LNodeNext::L(lnode));
+                    let key: *const K = lnode.key();
+                    let value: *const V = lnode.value();
+                    LNodeInsertResult::InsertedL(lnode, key, value, Some((k, v)))
+                },
+                LNodeRemoveResult::RemovedS(snode, k, v) => {
+                    let lnode = LNode::new(key.into(), value.into(), LNodeNext::S(snode));
+                    let key: *const K = lnode.key();
+                    let value: *const V = lnode.value();
+                    LNodeInsertResult::InsertedL(lnode, key, value, Some((k, v)))
+                },
                 LNodeRemoveResult::NotFound => panic!(),
             }
         }
@@ -138,6 +148,20 @@ fn remove_from_lnode<'a, K: Key, V: Value, L: Key>(this: &'a Arc<LNode<K, V>>, k
     }
 }
 
+pub(super) fn transform<K: Key, V: Value, ReduceT, ReduceOp, Op>(this: &Arc<LNode<K, V>>, reduce_op: ReduceOp, op: Op) -> LNodeTransformResult<K, V, ReduceT>
+where
+    ReduceT: Default,
+    ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+    Op: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
+{
+    let next = match &this.next {
+        LNodeNext::L(lnode) => transform(lnode, reduce_op.clone(), op.clone()),
+        LNodeNext::S(snode) => snode::transform(snode, op.clone()).into(),
+    };
+
+    transform_result(this, op(&this.key, &this.value), next, reduce_op)
+}
+
 pub(super) fn transmute<K: Key, V: Value, S: Key, X: Value, ReduceT, ReduceOp, Op>(this: &Arc<LNode<K, V>>, reduce_op: ReduceOp, op: Op) -> LNodeTransmuteResult<S, X, ReduceT>
 where
     ReduceT: Default,
@@ -174,9 +198,9 @@ where
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
 {
     match right {
-        MNode::<H, F, L, W, M>::C(cnode) => cnode::joint_transmute_lnode(cnode, this, |a,b| reduce_op(b, a), |k,v,l,w| both_op(l, w, k, v), right_op, left_op, depth),
-        MNode::<H, F, L, W, M>::L(lnode) => joint_transmute_lnode(this, lnode, reduce_op, both_op, left_op, right_op, depth),
-        MNode::<H, F, L, W, M>::S(snode) => joint_transmute_snode(this, snode, reduce_op, both_op, left_op, right_op, depth),
+        MNode::C(cnode) => cnode::joint_transmute_lnode(cnode, this, |a,b| reduce_op(b, a), |k,v,l,w| both_op(l, w, k, v), right_op, left_op, depth),
+        MNode::L(lnode) => joint_transmute_lnode(this, lnode, reduce_op, both_op, left_op, right_op, depth),
+        MNode::S(snode) => joint_transmute_snode(this, snode, reduce_op, both_op, left_op, right_op, depth),
     }
 }
 
@@ -383,6 +407,36 @@ where
     }
 }
 
+pub(super) fn transform_result<K: Key, V: Value, ReduceT, ReduceOp>(this: &Arc<LNode<K, V>>, result: MapTransformResult<V, ReduceT>, next: LNodeTransformResult<K, V, ReduceT>, reduce_op: ReduceOp) -> LNodeTransformResult<K, V, ReduceT>
+where
+    ReduceT: Default,
+    ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone
+{
+    match result {
+        MapTransformResult::Unchanged(lr) => match next {
+            LNodeTransformResult::Unchanged(rr) => LNodeTransformResult::Unchanged(reduce_op(&lr, &rr)),
+            LNodeTransformResult::L(lnode, rr) => LNodeTransformResult::L(LNode::new(this.key.clone(), this.value.clone(), LNodeNext::L(lnode)), reduce_op(&lr, &rr)),
+            LNodeTransformResult::S(snode, rr) => LNodeTransformResult::L(LNode::new(this.key.clone(), this.value.clone(), LNodeNext::S(snode)), reduce_op(&lr, &rr)),
+            LNodeTransformResult::Removed(rr) => LNodeTransformResult::S(SNode::new(this.key.clone(), this.value.clone()), reduce_op(&lr, &rr)),
+        },
+        MapTransformResult::Transformed(lv, lr) => match next {
+            LNodeTransformResult::Unchanged(rr) => LNodeTransformResult::L(LNode::new(this.key.clone(), lv, this.next.clone()), reduce_op(&lr, &rr)),
+            LNodeTransformResult::L(lnode, rr) => LNodeTransformResult::L(LNode::new(this.key.clone(), lv, LNodeNext::L(lnode)), reduce_op(&lr, &rr)),
+            LNodeTransformResult::S(snode, rr) => LNodeTransformResult::L(LNode::new(this.key.clone(), lv, LNodeNext::S(snode)), reduce_op(&lr, &rr)),
+            LNodeTransformResult::Removed(rr) => LNodeTransformResult::S(SNode::new(this.key.clone(), lv), reduce_op(&lr, &rr)),
+        },
+        MapTransformResult::Removed(lr) => match next {
+            LNodeTransformResult::Unchanged(rr) => match &this.next {
+                LNodeNext::L(lnode) => LNodeTransformResult::L(lnode.clone(), reduce_op(&lr, &rr)),
+                LNodeNext::S(snode) => LNodeTransformResult::S(snode.clone(), reduce_op(&lr, &rr)),
+            },
+            LNodeTransformResult::L(lnode, rr) => LNodeTransformResult::L(lnode, reduce_op(&lr, &rr)),
+            LNodeTransformResult::S(snode, rr) => LNodeTransformResult::S(snode, reduce_op(&lr, &rr)),
+            LNodeTransformResult::Removed(rr) => LNodeTransformResult::Removed(reduce_op(&lr, &rr)),
+        },
+    }
+}
+
 pub(super) fn transmute_result<S: Key, X: Value, ReduceT, ReduceOp>(result: MapTransmuteResult<S, X, ReduceT>, next: LNodeTransmuteResult<S, X, ReduceT>, reduce_op: ReduceOp) -> LNodeTransmuteResult<S, X, ReduceT>
 where
     ReduceT: Default,
@@ -415,7 +469,7 @@ where
         let lnode = LNode::new(key.into(), value.into(), this);
         let key: *const K = lnode.key();
         let value: *const V = lnode.value();
-        LNodeInsertResult::InsertedL(lnode, key, value)
+        LNodeInsertResult::InsertedL(lnode, key, value, None)
     }
     else {
         let this_flag = Flag::new_at_depth(this_hash, key_flag.depth()).unwrap();
@@ -423,7 +477,7 @@ where
         let snode = SNode::new(key.into(), value.into());
         let key: *const K = snode.key();
         let value: *const V = snode.value();
-        LNodeInsertResult::InsertedC(cnode::lift_to_cnode_and_insert(this.into(), this_flag, snode.into(), key_flag), key, value)
+        LNodeInsertResult::InsertedC(cnode::lift_to_cnode_and_insert(this.into(), this_flag, snode.into(), key_flag), key, value, None)
     }
 }
 

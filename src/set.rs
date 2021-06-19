@@ -46,17 +46,17 @@ use alloc::fmt::Debug;
 /// hash_set = hash_set.insert(Str::new(hello_world), false).unwrap().0;
 /// 
 /// // Inserting an already-inserted key returns a reference to the key in the set...
-/// assert!(hash_set.insert(Str::new(hello_world), false).map_err(|reference| *reference.get() == hello_world).unwrap_err());
+/// assert!(hash_set.insert(Str::new(hello_world), false).map_err(|reference| *reference == hello_world).unwrap_err());
 /// // ... unless you enable replacement.
 /// assert!(hash_set.insert(Str::new(hello_world), true).is_ok());
 ///
-/// assert!(hash_set.find(&Str::new(hello_world)).map(|reference| *reference.get() == hello_world).unwrap());
+/// assert!(hash_set.find(&Str::new(hello_world)).map(|reference| *reference == hello_world).unwrap());
 ///
 /// match hash_set.remove(&Str::new(hello_world)) {
 ///     Ok((mutated, reference)) => {
 ///         // Removing a key returns a reference to the key
 ///         // in the set in addition to the mutated set.
-///         println!("Value stored in hash_set: {}", reference.get());
+///         println!("Value stored in hash_set: {}", reference);
 ///         hash_set = mutated;
 ///     },
 ///     Err(_) => panic!(),
@@ -72,7 +72,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
     /// Get a new, empty HashTrieSet.
     pub fn new() -> Self {
         Self {
-            set: HashTrie::<H, F, K, (), M>::new()
+            set: HashTrie::new()
         }
     }
 
@@ -88,13 +88,13 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
 
     /// Search the HashTrieSet for the spot to insert the key and return both a mutated set and, if applicable, a reference to the replaced key.
     /// If found and replacement is disabled, a reference to the existing key is returned.
-    pub fn insert<'a, L: Key + HashLike<K> + Into<K>>(&'a self, key: L, replace: bool) -> Result<(Self, *const K), &'a K>
+    pub fn insert<'a, L: Key + HashLike<K> + Into<K>>(&'a self, key: L, replace: bool) -> Result<(Self, *const K, Option<&'a K>), &'a K>
     where
         K: HashLike<L>,
         K: PartialEq<L>,
         M: HasherBv<H, L>
     {
-        self.set.insert(key, (), replace).map(|(set, key, _value)| (Self {set}, key)).map_err(|(key, _value)| key)
+        self.set.insert(key, (), replace).map(|(set, key, _value, prev)| (Self {set}, key, prev.map(|(k, _v)| k))).map_err(|(key, _value)| key)
     }
 
     /// Search the HashTrieSet for the given key to remove and return a mutated set, or `HashTrieError::NotFound` if not found.
@@ -107,8 +107,24 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         self.set.visit(|key, _value| op(key));
     }
 
-    /// Run a transmute operation on each entry in the set. Returns the transmuteed set and a reduction of the secondary returns of the transmute operations.
-    pub fn transmute<S: Key + HashLike<S>, ReduceT, ReduceOp, Op>
+    /// Run a transform operation on each entry in the set. Returns the transformed set and a reduction of the secondary returns of the transform operations.
+    pub fn transform<ReduceT, ReduceOp, Op>
+        (&self, reduce_op: ReduceOp, op: Op) -> (Self, ReduceT)
+        where
+        Self: Sized,
+        ReduceT: Default,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        Op: Fn(&K) -> SetTransformResult<ReduceT> + Clone,
+    {
+        let (set, reduced) = self.set.transform(reduce_op, |key, _value| match op(key) {
+            SetTransformResult::Unchanged(reduced) => MapTransformResult::Unchanged(reduced),
+            SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
+        });
+        (Self{set}, reduced)
+    }
+
+    /// Run a transmute operation on each entry in the set. Returns the transmuted set and a reduction of the secondary returns of the transmute operations.
+    pub unsafe fn transmute<S: Key + HashLike<S>, ReduceT, ReduceOp, Op>
         (&self, reduce_op: ReduceOp, op: Op) -> (HashTrieSet<H, F, S, M>, ReduceT)
         where
         Self: Sized,
@@ -123,11 +139,11 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
             SetTransmuteResult::Transmuted(key, reduced) => MapTransmuteResult::Transmuted(key, (), reduced),
             SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
         });
-        (HashTrieSet::<H, F, S, M>{set}, reduced)
+        (HashTrieSet{set}, reduced)
     }
 
-    /// Run a transmute operation on each entry in the set. Returns the transmuteed set and a reduction of the secondary returns of the transmute operations.
-    pub fn joint_transmute<L: Key + HashLike<K>, W: Value, S: Key + HashLike<K>, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    /// Run a transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations.
+    pub unsafe fn joint_transmute<L: Key + HashLike<K>, S: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (HashTrieSet<H, F, S, M>, ReduceT)
         where
         Self: Sized,
@@ -157,7 +173,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
             SetTransmuteResult::Transmuted(key, reduced) => MapTransmuteResult::Transmuted(key, (), reduced),
             SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
         });
-        (HashTrieSet::<H, F, S, M>{set}, reduced)
+        (HashTrieSet{set}, reduced)
     }
 
 }
@@ -188,8 +204,8 @@ mod tests {
             set = set.insert(i, false).unwrap().0;
         }
 
-        let removed = set.transmute(|_,_| (), |_| SetTransmuteResult::Removed(()));
-        let summed = set.transmute(|&l,&r| l + r, |&k| SetTransmuteResult::Removed(k));
+        let removed = unsafe { set.transmute(|_,_| (), |_| SetTransmuteResult::Removed(())) };
+        let summed = unsafe { set.transmute(|&l,&r| l + r, |&k| SetTransmuteResult::Removed(k)) };
 
         assert_eq!(removed.0.size(), 0);
         assert_eq!(summed.1, 5050);

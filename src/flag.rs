@@ -26,8 +26,8 @@ impl <H: Hashword, F: Flagword<H>> Flag<H, F> where <F as core::convert::TryFrom
         else {
             Some(Flag {
                 hash_value: hash_value.clone(),
-                depth: depth + 1,
-                flag: F::nth_bit(F::try_from(H::from(hash_value.shr((depth + 1) * F::log_b())).bitand(F::mask_log_b())).unwrap().as_usize()).unwrap()
+                depth: depth,
+                flag: F::nth_bit(F::try_from(H::from(hash_value.shr(depth * F::log_b())).bitand(F::mask_log_b())).unwrap().as_usize()).unwrap()
             })
         }
     }
