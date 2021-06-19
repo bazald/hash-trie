@@ -62,34 +62,34 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         self.root.visit(op);
     }
 
-    pub(crate) fn transform<S: Key, X: Value, ReduceT, ReduceOp, Op>
+    pub(crate) fn transmute<S: Key, X: Value, ReduceT, ReduceOp, Op>
         (&self, reduce_op: ReduceOp, op: Op) -> (HashTrie<H, F, S, X, M>, ReduceT)
         where
         Self: Sized,
         ReduceT: Default,
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-        Op: Fn(&K, &V) -> MapTransformResult<S, X, ReduceT> + Clone,
+        Op: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,
         K: HashLike<S>,
         K: PartialEq<S>,
         M: HasherBv<H, S>,
     {
-        match self.root.transform(reduce_op, op) {
-            MNodeTransformResult::C(cnode, reduced) => (HashTrie::<H, F, S, X, M>::singleton(MNode::C(cnode)), reduced),
-            MNodeTransformResult::L(lnode, reduced) => (HashTrie::<H, F, S, X, M>::singleton(MNode::L(lnode)), reduced),
-            MNodeTransformResult::S(snode, reduced) => (HashTrie::<H, F, S, X, M>::singleton(MNode::S(snode)), reduced),
-            MNodeTransformResult::Removed(reduced) => (HashTrie::<H, F, S, X, M>::default(), reduced),
+        match self.root.transmute(reduce_op, op) {
+            MNodeTransmuteResult::C(cnode, reduced) => (HashTrie::<H, F, S, X, M>::singleton(MNode::C(cnode)), reduced),
+            MNodeTransmuteResult::L(lnode, reduced) => (HashTrie::<H, F, S, X, M>::singleton(MNode::L(lnode)), reduced),
+            MNodeTransmuteResult::S(snode, reduced) => (HashTrie::<H, F, S, X, M>::singleton(MNode::S(snode)), reduced),
+            MNodeTransmuteResult::Removed(reduced) => (HashTrie::<H, F, S, X, M>::default(), reduced),
         }
     }
 
-    pub(crate) fn joint_transform<L: Key, W: Value, S: Key, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub(crate) fn joint_transmute<L: Key, W: Value, S: Key, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (HashTrie<H, F, S, X, M>, ReduceT)
         where
         Self: Sized,
         ReduceT: Default,
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-        BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
-        LeftOp: Fn(&K, &V) -> MapTransformResult<S, X, ReduceT> + Clone,
-        RightOp: Fn(&L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
+        BothOp: Fn(&K, &V, &L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,
+        RightOp: Fn(&L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
         K: HashLike<L>,
         K: PartialEq<L>,
         K: HashLike<S>,
@@ -101,11 +101,11 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         M: HasherBv<H, L>,
         M: HasherBv<H, S>,
     {
-        match self.root.joint_transform(&right.root, reduce_op, both_op, left_op, right_op, 0) {
-            MNodeTransformResult::C(cnode, reduced) => (HashTrie::<H, F, S, X, M>::singleton(MNode::C(cnode)), reduced),
-            MNodeTransformResult::L(lnode, reduced) => (HashTrie::<H, F, S, X, M>::singleton(MNode::L(lnode)), reduced),
-            MNodeTransformResult::S(snode, reduced) => (HashTrie::<H, F, S, X, M>::singleton(MNode::S(snode)), reduced),
-            MNodeTransformResult::Removed(reduced) => (HashTrie::<H, F, S, X, M>::default(), reduced),
+        match self.root.joint_transmute(&right.root, reduce_op, both_op, left_op, right_op, 0) {
+            MNodeTransmuteResult::C(cnode, reduced) => (HashTrie::<H, F, S, X, M>::singleton(MNode::C(cnode)), reduced),
+            MNodeTransmuteResult::L(lnode, reduced) => (HashTrie::<H, F, S, X, M>::singleton(MNode::L(lnode)), reduced),
+            MNodeTransmuteResult::S(snode, reduced) => (HashTrie::<H, F, S, X, M>::singleton(MNode::S(snode)), reduced),
+            MNodeTransmuteResult::Removed(reduced) => (HashTrie::<H, F, S, X, M>::default(), reduced),
         }
     }
 

@@ -94,26 +94,26 @@ impl <'a, H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> From<SNodeR
     }
 }
 
-/// MapTransformResult is the result of a transform operation on a single entry of a map.
+/// MapTransmuteResult is the result of a transmute operation on a single entry of a map.
 #[must_use]
-pub enum MapTransformResult<K, V, ReduceT> {
-    /// The values has been transformed.
-    Transformed(K, V, ReduceT),
+pub enum MapTransmuteResult<K, V, ReduceT> {
+    /// The values has been transmuteed.
+    Transmuted(K, V, ReduceT),
     /// The key-value pair was removed.
     Removed(ReduceT),
 }
 
-/// SetTransformResult is the result of a transform operation on a single entry of a set.
+/// SetTransmuteResult is the result of a transmute operation on a single entry of a set.
 #[must_use]
-pub enum SetTransformResult<K, ReduceT> {
-    /// The value has been transformed.
-    Transformed(K, ReduceT),
+pub enum SetTransmuteResult<K, ReduceT> {
+    /// The value has been transmuteed.
+    Transmuted(K, ReduceT),
     /// The value was removed.
     Removed(ReduceT),
 }
 
 #[must_use]
-pub(crate) enum MNodeTransformResult<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> {
+pub(crate) enum MNodeTransmuteResult<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> {
     C(CNode<H, F, K, V, M>, ReduceT),
     L(Arc<LNode<K, V>>, ReduceT),
     S(Arc<SNode<K, V>>, ReduceT),
@@ -121,69 +121,69 @@ pub(crate) enum MNodeTransformResult<H: Hashword, F: Flagword<H>, K: Key, V: Val
 }
 
 #[must_use]
-pub(crate) enum LNodeTransformResult<K: Key, V: Value, ReduceT> {
+pub(crate) enum LNodeTransmuteResult<K: Key, V: Value, ReduceT> {
     L(Arc<LNode<K, V>>, ReduceT),
     S(Arc<SNode<K, V>>, ReduceT),
     Removed(ReduceT),
 }
 
-impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> From<LNodeTransformResult<K, V, ReduceT>> for MNodeTransformResult<H, F, K, V, M, ReduceT> {
-    fn from(other: LNodeTransformResult<K, V, ReduceT>) -> Self {
+impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> From<LNodeTransmuteResult<K, V, ReduceT>> for MNodeTransmuteResult<H, F, K, V, M, ReduceT> {
+    fn from(other: LNodeTransmuteResult<K, V, ReduceT>) -> Self {
         match other {
-            LNodeTransformResult::L(lnode, reduced) => MNodeTransformResult::L(lnode, reduced),
-            LNodeTransformResult::S(snode, reduced) => MNodeTransformResult::S(snode, reduced),
-            LNodeTransformResult::Removed(reduced) => MNodeTransformResult::Removed(reduced),
+            LNodeTransmuteResult::L(lnode, reduced) => MNodeTransmuteResult::L(lnode, reduced),
+            LNodeTransmuteResult::S(snode, reduced) => MNodeTransmuteResult::S(snode, reduced),
+            LNodeTransmuteResult::Removed(reduced) => MNodeTransmuteResult::Removed(reduced),
         }
     }
 }
 
 #[must_use]
-pub(crate) enum SNodeTransformResult<K: Key, V: Value, ReduceT> {
+pub(crate) enum SNodeTransmuteResult<K: Key, V: Value, ReduceT> {
     S(Arc<SNode<K, V>>, ReduceT),
     Removed(ReduceT),
 }
 
-impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> From<SNodeTransformResult<K, V, ReduceT>> for MNodeTransformResult<H, F, K, V, M, ReduceT> {
-    fn from(other: SNodeTransformResult<K, V, ReduceT>) -> Self {
+impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> From<SNodeTransmuteResult<K, V, ReduceT>> for MNodeTransmuteResult<H, F, K, V, M, ReduceT> {
+    fn from(other: SNodeTransmuteResult<K, V, ReduceT>) -> Self {
         match other {
-            SNodeTransformResult::S(snode, reduced) => MNodeTransformResult::S(snode, reduced),
-            SNodeTransformResult::Removed(reduced) => MNodeTransformResult::Removed(reduced),
+            SNodeTransmuteResult::S(snode, reduced) => MNodeTransmuteResult::S(snode, reduced),
+            SNodeTransmuteResult::Removed(reduced) => MNodeTransmuteResult::Removed(reduced),
         }
     }
 }
 
-impl <K: Key, V: Value, ReduceT> From<SNodeTransformResult<K, V, ReduceT>> for LNodeTransformResult<K, V, ReduceT> {
-    fn from(other: SNodeTransformResult<K, V, ReduceT>) -> Self {
+impl <K: Key, V: Value, ReduceT> From<SNodeTransmuteResult<K, V, ReduceT>> for LNodeTransmuteResult<K, V, ReduceT> {
+    fn from(other: SNodeTransmuteResult<K, V, ReduceT>) -> Self {
         match other {
-            SNodeTransformResult::S(snode, reduced) => LNodeTransformResult::S(snode, reduced),
-            SNodeTransformResult::Removed(reduced) => LNodeTransformResult::Removed(reduced),
+            SNodeTransmuteResult::S(snode, reduced) => LNodeTransmuteResult::S(snode, reduced),
+            SNodeTransmuteResult::Removed(reduced) => LNodeTransmuteResult::Removed(reduced),
         }
     }
 }
 
-impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> From<MapTransformResult<K, V, ReduceT>> for MNodeTransformResult<H, F, K, V, M, ReduceT> {
-    fn from(other: MapTransformResult<K, V, ReduceT>) -> Self {
+impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> From<MapTransmuteResult<K, V, ReduceT>> for MNodeTransmuteResult<H, F, K, V, M, ReduceT> {
+    fn from(other: MapTransmuteResult<K, V, ReduceT>) -> Self {
         match other {
-            MapTransformResult::Transformed(key, value, reduced) => MNodeTransformResult::S(SNode::new(key, value), reduced),
-            MapTransformResult::Removed(reduced) => MNodeTransformResult::Removed(reduced),
+            MapTransmuteResult::Transmuted(key, value, reduced) => MNodeTransmuteResult::S(SNode::new(key, value), reduced),
+            MapTransmuteResult::Removed(reduced) => MNodeTransmuteResult::Removed(reduced),
         }
     }
 }
 
-impl <K: Key, V: Value, ReduceT> From<MapTransformResult<K, V, ReduceT>> for LNodeTransformResult<K, V, ReduceT> {
-    fn from(other: MapTransformResult<K, V, ReduceT>) -> Self {
+impl <K: Key, V: Value, ReduceT> From<MapTransmuteResult<K, V, ReduceT>> for LNodeTransmuteResult<K, V, ReduceT> {
+    fn from(other: MapTransmuteResult<K, V, ReduceT>) -> Self {
         match other {
-            MapTransformResult::Transformed(key, value, reduced) => LNodeTransformResult::S(SNode::new(key, value), reduced),
-            MapTransformResult::Removed(reduced) => LNodeTransformResult::Removed(reduced),
+            MapTransmuteResult::Transmuted(key, value, reduced) => LNodeTransmuteResult::S(SNode::new(key, value), reduced),
+            MapTransmuteResult::Removed(reduced) => LNodeTransmuteResult::Removed(reduced),
         }
     }
 }
 
-impl <K: Key, V: Value, ReduceT> From<MapTransformResult<K, V, ReduceT>> for SNodeTransformResult<K, V, ReduceT> {
-    fn from(other: MapTransformResult<K, V, ReduceT>) -> Self {
+impl <K: Key, V: Value, ReduceT> From<MapTransmuteResult<K, V, ReduceT>> for SNodeTransmuteResult<K, V, ReduceT> {
+    fn from(other: MapTransmuteResult<K, V, ReduceT>) -> Self {
         match other {
-            MapTransformResult::Transformed(key, value, reduced) => SNodeTransformResult::S(SNode::new(key, value), reduced),
-            MapTransformResult::Removed(reduced) => SNodeTransformResult::Removed(reduced),
+            MapTransmuteResult::Transmuted(key, value, reduced) => SNodeTransmuteResult::S(SNode::new(key, value), reduced),
+            MapTransmuteResult::Removed(reduced) => SNodeTransmuteResult::Removed(reduced),
         }
     }
 }

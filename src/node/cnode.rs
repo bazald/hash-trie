@@ -111,11 +111,11 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> CNode<H,
     }
 }
 
-pub(super) fn transform<H: Hashword, F: Flagword<H>, K: Key, V: Value, S: Key, X: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, Op>(this: &CNode<H, F, K, V, M>, reduce_op: ReduceOp, op: Op) -> MNodeTransformResult<H, F, S, X, M, ReduceT>
+pub(super) fn transmute<H: Hashword, F: Flagword<H>, K: Key, V: Value, S: Key, X: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, Op>(this: &CNode<H, F, K, V, M>, reduce_op: ReduceOp, op: Op) -> MNodeTransmuteResult<H, F, S, X, M, ReduceT>
 where
     ReduceT: Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-    Op: Fn(&K, &V) -> MapTransformResult<S, X, ReduceT> + Clone,
+    Op: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,
     K: HashLike<S>,
     K: PartialEq<S>,
     M: HasherBv<H, S>,
@@ -128,26 +128,26 @@ where
 
     for index in 0..<F>::max_ones() {
         if let Ok(node) = this.nodes.at_bit_index(index) {
-            match node.transform(reduce_op.clone(), op.clone()) {
-                MNodeTransformResult::C(cnode, r) => {
+            match node.transmute(reduce_op.clone(), op.clone()) {
+                MNodeTransmuteResult::C(cnode, r) => {
                     size += cnode.size();
                     bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                     values_t.push(MNode::C(cnode));
                     reduced = reduce_op(&reduced, &r);
                 },
-                MNodeTransformResult::L(lnode, r) => {
+                MNodeTransmuteResult::L(lnode, r) => {
                     size += lnode.size();
                     bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                     values_t.push(MNode::L(lnode));
                     reduced = reduce_op(&reduced, &r);
                 },
-                MNodeTransformResult::S(snode, r) => {
+                MNodeTransmuteResult::S(snode, r) => {
                     size += 1;
                     bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                     values_t.push(MNode::S(snode));
                     reduced = reduce_op(&reduced, &r);
                 },
-                MNodeTransformResult::Removed(r) => {
+                MNodeTransmuteResult::Removed(r) => {
                     reduced = reduce_op(&reduced, &r);
                 },
             }
@@ -155,23 +155,23 @@ where
     }
 
     match values_t.len() {
-        0 => MNodeTransformResult::Removed(reduced),
+        0 => MNodeTransmuteResult::Removed(reduced),
         1 => match values_t.pop().unwrap() {
-            MNode::C(_cnode) => MNodeTransformResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
-            MNode::L(lnode) => MNodeTransformResult::L(lnode, reduced),
-            MNode::S(snode) => MNodeTransformResult::S(snode, reduced),
+            MNode::C(_cnode) => MNodeTransmuteResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+            MNode::L(lnode) => MNodeTransmuteResult::L(lnode, reduced),
+            MNode::S(snode) => MNodeTransmuteResult::S(snode, reduced),
         },
-        _ => MNodeTransformResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+        _ => MNodeTransmuteResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
     }
 }
 
-pub(crate) fn joint_transform<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, S: Key, X: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &MNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp, depth: usize) -> MNodeTransformResult<H, F, S, X, M, ReduceT>
+pub(crate) fn joint_transmute<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, S: Key, X: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &MNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp, depth: usize) -> MNodeTransmuteResult<H, F, S, X, M, ReduceT>
 where
     ReduceT: Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-    BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
-    LeftOp: Fn(&K, &V) -> MapTransformResult<S, X, ReduceT> + Clone,
-    RightOp: Fn(&L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
+    BothOp: Fn(&K, &V, &L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
+    LeftOp: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,
+    RightOp: Fn(&L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
     K: HashLike<L>,
     K: PartialEq<L>,
     K: HashLike<S>,
@@ -185,19 +185,19 @@ where
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
 {
     match right {
-        MNode::<H, F, L, W, M>::C(cnode) => joint_transform_cnode(this, cnode, reduce_op, both_op, left_op, right_op, depth),
-        MNode::<H, F, L, W, M>::L(lnode) => joint_transform_lnode(this, lnode, reduce_op, both_op, left_op, right_op, depth),
-        MNode::<H, F, L, W, M>::S(snode) => joint_transform_snode(this, snode, reduce_op, both_op, left_op, right_op, depth),
+        MNode::<H, F, L, W, M>::C(cnode) => joint_transmute_cnode(this, cnode, reduce_op, both_op, left_op, right_op, depth),
+        MNode::<H, F, L, W, M>::L(lnode) => joint_transmute_lnode(this, lnode, reduce_op, both_op, left_op, right_op, depth),
+        MNode::<H, F, L, W, M>::S(snode) => joint_transmute_snode(this, snode, reduce_op, both_op, left_op, right_op, depth),
     }
 }
 
-pub(crate) fn joint_transform_cnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, S: Key, W: Value, X: Value, M: HasherBv<H, K> + HasherBv<H, L>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &CNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp, depth: usize) -> MNodeTransformResult<H, F, S, X, M, ReduceT>
+pub(crate) fn joint_transmute_cnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, S: Key, W: Value, X: Value, M: HasherBv<H, K> + HasherBv<H, L>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &CNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp, depth: usize) -> MNodeTransmuteResult<H, F, S, X, M, ReduceT>
 where
     ReduceT: Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-    BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
-    LeftOp: Fn(&K, &V) -> MapTransformResult<S, X, ReduceT> + Clone,
-    RightOp: Fn(&L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
+    BothOp: Fn(&K, &V, &L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
+    LeftOp: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,
+    RightOp: Fn(&L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
     K: HashLike<L>,
     K: PartialEq<L>,
     K: HashLike<S>,
@@ -216,64 +216,64 @@ where
     let mut reduced = ReduceT::default();
 
     for index in 0..<F>::max_ones() {
-        let transform_result = if let Ok(node) = this.nodes.at_bit_index(index) {
+        let transmute_result = if let Ok(node) = this.nodes.at_bit_index(index) {
             if let Ok(right) = right.nodes.at_bit_index(index) {
-                node.joint_transform(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1)
+                node.joint_transmute(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1)
             }
             else {
-                node.transform(reduce_op.clone(), left_op.clone())
+                node.transmute(reduce_op.clone(), left_op.clone())
             }
         }
         else if let Ok(right) = right.nodes.at_bit_index(index) {
-            right.transform(reduce_op.clone(), right_op.clone())
+            right.transmute(reduce_op.clone(), right_op.clone())
         }
         else {
             continue;
         };
 
-        match transform_result {
-            MNodeTransformResult::C(cnode, r) => {
+        match transmute_result {
+            MNodeTransmuteResult::C(cnode, r) => {
                 size += cnode.size();
                 bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                 values_t.push(MNode::C(cnode));
                 reduced = reduce_op(&reduced, &r);
             },
-            MNodeTransformResult::L(lnode, r) => {
+            MNodeTransmuteResult::L(lnode, r) => {
                 size += lnode.size();
                 bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                 values_t.push(MNode::L(lnode));
                 reduced = reduce_op(&reduced, &r);
             },
-            MNodeTransformResult::S(snode, r) => {
+            MNodeTransmuteResult::S(snode, r) => {
                 size += 1;
                 bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                 values_t.push(MNode::S(snode));
                 reduced = reduce_op(&reduced, &r);
             },
-            MNodeTransformResult::Removed(r) => {
+            MNodeTransmuteResult::Removed(r) => {
                 reduced = reduce_op(&reduced, &r);
             },
         }
     }
 
     match values_t.len() {
-        0 => MNodeTransformResult::Removed(reduced),
+        0 => MNodeTransmuteResult::Removed(reduced),
         1 => match values_t.pop().unwrap() {
-            MNode::C(_cnode) => MNodeTransformResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
-            MNode::L(lnode) => MNodeTransformResult::L(lnode, reduced),
-            MNode::S(snode) => MNodeTransformResult::S(snode, reduced),
+            MNode::C(_cnode) => MNodeTransmuteResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+            MNode::L(lnode) => MNodeTransmuteResult::L(lnode, reduced),
+            MNode::S(snode) => MNodeTransmuteResult::S(snode, reduced),
         },
-        _ => MNodeTransformResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+        _ => MNodeTransmuteResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
     }
 }
 
-pub(crate) fn joint_transform_lnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, S: Key, W: Value, X: Value, M: HasherBv<H, K> + HasherBv<H, L>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &Arc<LNode<L, W>>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp, depth: usize) -> MNodeTransformResult<H, F, S, X, M, ReduceT>
+pub(crate) fn joint_transmute_lnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, S: Key, W: Value, X: Value, M: HasherBv<H, K> + HasherBv<H, L>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &Arc<LNode<L, W>>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp, depth: usize) -> MNodeTransmuteResult<H, F, S, X, M, ReduceT>
 where
     ReduceT: Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-    BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
-    LeftOp: Fn(&K, &V) -> MapTransformResult<S, X, ReduceT> + Clone,
-    RightOp: Fn(&L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
+    BothOp: Fn(&K, &V, &L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
+    LeftOp: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,
+    RightOp: Fn(&L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
     K: HashLike<L>,
     K: PartialEq<L>,
     K: HashLike<S>,
@@ -294,64 +294,64 @@ where
     let mut reduced = ReduceT::default();
 
     for index in 0..<F>::max_ones() {
-        let transform_result = if let Ok(node) = this.nodes.at_bit_index(index) {
+        let transmute_result = if let Ok(node) = this.nodes.at_bit_index(index) {
             if flag == F::nth_bit(index).unwrap() {
-                node.joint_transform_lnode(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1)
+                node.joint_transmute_lnode(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1)
             }
             else {
-                node.transform(reduce_op.clone(), left_op.clone())
+                node.transmute(reduce_op.clone(), left_op.clone())
             }
         }
         else if flag == F::nth_bit(index).unwrap() {
-            lnode::transform(right, reduce_op.clone(), right_op.clone()).into()
+            lnode::transmute(right, reduce_op.clone(), right_op.clone()).into()
         }
         else {
             continue;
         };
 
-        match transform_result {
-            MNodeTransformResult::C(cnode, r) => {
+        match transmute_result {
+            MNodeTransmuteResult::C(cnode, r) => {
                 size += cnode.size();
                 bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                 values_t.push(MNode::C(cnode));
                 reduced = reduce_op(&reduced, &r);
             },
-            MNodeTransformResult::L(lnode, r) => {
+            MNodeTransmuteResult::L(lnode, r) => {
                 size += lnode.size();
                 bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                 values_t.push(MNode::L(lnode));
                 reduced = reduce_op(&reduced, &r);
             },
-            MNodeTransformResult::S(snode, r) => {
+            MNodeTransmuteResult::S(snode, r) => {
                 size += 1;
                 bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                 values_t.push(MNode::S(snode));
                 reduced = reduce_op(&reduced, &r);
             },
-            MNodeTransformResult::Removed(r) => {
+            MNodeTransmuteResult::Removed(r) => {
                 reduced = reduce_op(&reduced, &r);
             },
         }
     }
 
     match values_t.len() {
-        0 => MNodeTransformResult::Removed(reduced),
+        0 => MNodeTransmuteResult::Removed(reduced),
         1 => match values_t.pop().unwrap() {
-            MNode::C(_cnode) => MNodeTransformResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
-            MNode::L(lnode) => MNodeTransformResult::L(lnode, reduced),
-            MNode::S(snode) => MNodeTransformResult::S(snode, reduced),
+            MNode::C(_cnode) => MNodeTransmuteResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+            MNode::L(lnode) => MNodeTransmuteResult::L(lnode, reduced),
+            MNode::S(snode) => MNodeTransmuteResult::S(snode, reduced),
         },
-        _ => MNodeTransformResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+        _ => MNodeTransmuteResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
     }
 }
 
-pub(crate) fn joint_transform_snode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, S: Key, X: Value, M: HasherBv<H, K> + HasherBv<H, L>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &Arc<SNode<L, W>>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp, depth: usize) -> MNodeTransformResult<H, F, S, X, M, ReduceT>
+pub(crate) fn joint_transmute_snode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, S: Key, X: Value, M: HasherBv<H, K> + HasherBv<H, L>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &Arc<SNode<L, W>>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp, depth: usize) -> MNodeTransmuteResult<H, F, S, X, M, ReduceT>
 where
     ReduceT: Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-    BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
-    LeftOp: Fn(&K, &V) -> MapTransformResult<S, X, ReduceT> + Clone,
-    RightOp: Fn(&L, &W) -> MapTransformResult<S, X, ReduceT> + Clone,
+    BothOp: Fn(&K, &V, &L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
+    LeftOp: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,
+    RightOp: Fn(&L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
     K: HashLike<L>,
     K: PartialEq<L>,
     K: HashLike<S>,
@@ -372,54 +372,54 @@ where
     let mut reduced = ReduceT::default();
 
     for index in 0..<F>::max_ones() {
-        let transform_result = if let Ok(node) = this.nodes.at_bit_index(index) {
+        let transmute_result = if let Ok(node) = this.nodes.at_bit_index(index) {
             if flag == F::nth_bit(index).unwrap() {
-                node.joint_transform_snode(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1)
+                node.joint_transmute_snode(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1)
             }
             else {
-                node.transform(reduce_op.clone(), left_op.clone())
+                node.transmute(reduce_op.clone(), left_op.clone())
             }
         }
         else if flag == F::nth_bit(index).unwrap() {
-            snode::transform(right, right_op.clone()).into()
+            snode::transmute(right, right_op.clone()).into()
         }
         else {
             continue;
         };
 
-        match transform_result {
-            MNodeTransformResult::C(cnode, r) => {
+        match transmute_result {
+            MNodeTransmuteResult::C(cnode, r) => {
                 size += cnode.size();
                 bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                 values_t.push(MNode::C(cnode));
                 reduced = reduce_op(&reduced, &r);
             },
-            MNodeTransformResult::L(lnode, r) => {
+            MNodeTransmuteResult::L(lnode, r) => {
                 size += lnode.size();
                 bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                 values_t.push(MNode::L(lnode));
                 reduced = reduce_op(&reduced, &r);
             },
-            MNodeTransformResult::S(snode, r) => {
+            MNodeTransmuteResult::S(snode, r) => {
                 size += 1;
                 bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                 values_t.push(MNode::S(snode));
                 reduced = reduce_op(&reduced, &r);
             },
-            MNodeTransformResult::Removed(r) => {
+            MNodeTransmuteResult::Removed(r) => {
                 reduced = reduce_op(&reduced, &r);
             },
         }
     }
 
     match values_t.len() {
-        0 => MNodeTransformResult::Removed(reduced),
+        0 => MNodeTransmuteResult::Removed(reduced),
         1 => match values_t.pop().unwrap() {
-            MNode::C(_cnode) => MNodeTransformResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
-            MNode::L(lnode) => MNodeTransformResult::L(lnode, reduced),
-            MNode::S(snode) => MNodeTransformResult::S(snode, reduced),
+            MNode::C(_cnode) => MNodeTransmuteResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+            MNode::L(lnode) => MNodeTransmuteResult::L(lnode, reduced),
+            MNode::S(snode) => MNodeTransmuteResult::S(snode, reduced),
         },
-        _ => MNodeTransformResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+        _ => MNodeTransmuteResult::C(CNode::<H, F, S, X, M>::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
     }
 }
 

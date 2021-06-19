@@ -110,16 +110,16 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         self.set.visit(|k,v| op(k, v));
     }
 
-    /// Run a transform operation on each entry in the map. Returns the transformed map and a reduction of the secondary returns of the transform operations.
-    pub fn transform<ReduceT, ReduceOp, Op>
+    /// Run a transmute operation on each entry in the map. Returns the transmuteed map and a reduction of the secondary returns of the transmute operations.
+    pub fn transmute<ReduceT, ReduceOp, Op>
         (&self, reduce_op: ReduceOp, op: Op) -> (Self, ReduceT)
         where
         Self: Sized,
         ReduceT: Default,
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-        Op: Fn(&K, &V) -> MapTransformResult<K, V, ReduceT> + Clone
+        Op: Fn(&K, &V) -> MapTransmuteResult<K, V, ReduceT> + Clone
     {
-        let (set, reduced) = self.set.transform(reduce_op, |k, v| op(k, v));
+        let (set, reduced) = self.set.transmute(reduce_op, |k, v| op(k, v));
         (Self{set}, reduced)
     }
 }
@@ -143,7 +143,7 @@ mod tests {
     use crate::*;
     
     #[test]
-    fn map_transform() {
+    fn map_transmute() {
         let mut map = DefaultHashTrieMap::<i32, i32>::new();
         let mut squared = DefaultHashTrieMap::<i32, i32>::new();
 
@@ -152,8 +152,8 @@ mod tests {
             squared = squared.insert(i, i * i, false).unwrap().0;
         }
 
-        let removed = map.transform(|_,_| (), |_,_| MapTransformResult::Removed(()));
-        let tsquared = map.transform(|_,_| (), |k,v| MapTransformResult::Transformed(*k, v * v, ())); // TODO: add checks on *k
+        let removed = map.transmute(|_,_| (), |_,_| MapTransmuteResult::Removed(()));
+        let tsquared = map.transmute(|_,_| (), |k,v| MapTransmuteResult::Transmuted(*k, v * v, ())); // TODO: add checks on *k
 
         assert_eq!(removed.0.size(), 0);
 

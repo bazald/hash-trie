@@ -107,35 +107,35 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         self.set.visit(|key, _value| op(key));
     }
 
-    /// Run a transform operation on each entry in the set. Returns the transformed set and a reduction of the secondary returns of the transform operations.
-    pub fn transform<S: Key + HashLike<S>, ReduceT, ReduceOp, Op>
+    /// Run a transmute operation on each entry in the set. Returns the transmuteed set and a reduction of the secondary returns of the transmute operations.
+    pub fn transmute<S: Key + HashLike<S>, ReduceT, ReduceOp, Op>
         (&self, reduce_op: ReduceOp, op: Op) -> (HashTrieSet<H, F, S, M>, ReduceT)
         where
         Self: Sized,
         ReduceT: Default,
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-        Op: Fn(&K) -> SetTransformResult<S, ReduceT> + Clone,
+        Op: Fn(&K) -> SetTransmuteResult<S, ReduceT> + Clone,
         K: HashLike<S>,
         K: PartialEq<S>,
         M: HasherBv<H, S>,
     {
-        let (set, reduced) = self.set.transform(reduce_op, |key, _value| match op(key) {
-            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, (), reduced),
-            SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
+        let (set, reduced) = self.set.transmute(reduce_op, |key, _value| match op(key) {
+            SetTransmuteResult::Transmuted(key, reduced) => MapTransmuteResult::Transmuted(key, (), reduced),
+            SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
         });
         (HashTrieSet::<H, F, S, M>{set}, reduced)
     }
 
-    /// Run a transform operation on each entry in the set. Returns the transformed set and a reduction of the secondary returns of the transform operations.
-    pub fn joint_transform<L: Key + HashLike<K>, W: Value, S: Key + HashLike<K>, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    /// Run a transmute operation on each entry in the set. Returns the transmuteed set and a reduction of the secondary returns of the transmute operations.
+    pub fn joint_transmute<L: Key + HashLike<K>, W: Value, S: Key + HashLike<K>, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (HashTrieSet<H, F, S, M>, ReduceT)
         where
         Self: Sized,
         ReduceT: Default,
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-        BothOp: Fn(&K, &L) -> SetTransformResult<S, ReduceT> + Clone,
-        LeftOp: Fn(&K) -> SetTransformResult<S, ReduceT> + Clone,
-        RightOp: Fn(&L) -> SetTransformResult<S, ReduceT> + Clone,
+        BothOp: Fn(&K, &L) -> SetTransmuteResult<S, ReduceT> + Clone,
+        LeftOp: Fn(&K) -> SetTransmuteResult<S, ReduceT> + Clone,
+        RightOp: Fn(&L) -> SetTransmuteResult<S, ReduceT> + Clone,
         K: HashLike<L>,
         K: PartialEq<L>,
         K: HashLike<S>,
@@ -147,15 +147,15 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         M: HasherBv<H, L>,
         M: HasherBv<H, S>,
     {
-        let (set, reduced) = self.set.joint_transform(&right.set, reduce_op, |l,_,r,_| match both_op(l, r) {
-            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, (), reduced),
-            SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
+        let (set, reduced) = self.set.joint_transmute(&right.set, reduce_op, |l,_,r,_| match both_op(l, r) {
+            SetTransmuteResult::Transmuted(key, reduced) => MapTransmuteResult::Transmuted(key, (), reduced),
+            SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
         }, |l,_| match left_op(l) {
-            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, (), reduced),
-            SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
+            SetTransmuteResult::Transmuted(key, reduced) => MapTransmuteResult::Transmuted(key, (), reduced),
+            SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
         }, |r,_| match right_op(r) {
-            SetTransformResult::Transformed(key, reduced) => MapTransformResult::Transformed(key, (), reduced),
-            SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
+            SetTransmuteResult::Transmuted(key, reduced) => MapTransmuteResult::Transmuted(key, (), reduced),
+            SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
         });
         (HashTrieSet::<H, F, S, M>{set}, reduced)
     }
@@ -181,15 +181,15 @@ mod tests {
     use crate::*;
     
     #[test]
-    fn set_transform() {
+    fn set_transmute() {
         let mut set = DefaultHashTrieSet::<i32>::new();
 
         for i in 1..101 {
             set = set.insert(i, false).unwrap().0;
         }
 
-        let removed = set.transform(|_,_| (), |_| SetTransformResult::Removed(()));
-        let summed = set.transform(|&l,&r| l + r, |&k| SetTransformResult::Removed(k));
+        let removed = set.transmute(|_,_| (), |_| SetTransmuteResult::Removed(()));
+        let summed = set.transmute(|&l,&r| l + r, |&k| SetTransmuteResult::Removed(k));
 
         assert_eq!(removed.0.size(), 0);
         assert_eq!(summed.1, 5050);
