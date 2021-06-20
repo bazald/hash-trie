@@ -6,8 +6,9 @@ use alloc::fmt::Debug;
 /// # Example Usage
 /// 
 /// ```
+/// use fnv::FnvHasher;
 /// use hash_trie::{HashTrieSet, traits::HashLike};
-/// use std::{collections::hash_map::DefaultHasher, string::String};
+/// use std::string::String;
 /// 
 /// #[derive(Clone,Debug,Eq,Hash,PartialEq)]
 /// struct Str<'a> {
@@ -40,13 +41,13 @@ use alloc::fmt::Debug;
 /// unsafe impl <'a> Send for Str<'a> {}
 /// unsafe impl <'a> Sync for Str<'a> {}
 /// 
-/// let mut hash_set: HashTrieSet<u64, u32, String, DefaultHasher> = HashTrieSet::new();
+/// let mut hash_set: HashTrieSet<u64, u32, String, FnvHasher> = HashTrieSet::new();
 /// let hello_world = "Hello, world!";
 ///
 /// hash_set = hash_set.insert(Str::new(hello_world), false).unwrap().0;
 /// 
 /// // Inserting an already-inserted key returns a reference to the key in the set...
-/// assert!(hash_set.insert(Str::new(hello_world), false).map_err(|reference| *reference == hello_world).unwrap_err());
+/// assert!(*hash_set.insert(Str::new(hello_world), false).map(|_| ()).unwrap_err() == hello_world);
 /// // ... unless you enable replacement.
 /// assert!(hash_set.insert(Str::new(hello_world), true).is_ok());
 ///
@@ -143,7 +144,77 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
     }
 
     /// Run a transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations.
-    pub unsafe fn joint_transmute<L: Key + HashLike<K>, S: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub fn transform_with_transformed<ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+        (&self, right: &Self, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (Self, ReduceT)
+        where
+        Self: Sized,
+        ReduceT: Default,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        BothOp: Fn(&K, &K) -> SetJointTransformResult<ReduceT> + Clone,
+        LeftOp: Fn(&K) -> SetTransformResult<ReduceT> + Clone,
+        RightOp: Fn(&K) -> SetTransformResult<ReduceT> + Clone,
+    {
+        let (set, reduced) = self.set.transform_with_transformed(&right.set, reduce_op,
+            |l,_,r,_| both_op(l, r).into(),
+            |l,_| left_op(l).into(),
+            |r,_| right_op(r).into());
+        (HashTrieSet{set}, reduced)
+    }
+
+    /// Run a transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations.
+    pub unsafe fn transform_with_transmuted<L: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+        (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (Self, ReduceT)
+        where
+        Self: Sized,
+        ReduceT: Default,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        BothOp: Fn(&K, &L) -> SetTransformResult<ReduceT> + Clone,
+        LeftOp: Fn(&K) -> SetTransformResult<ReduceT> + Clone,
+        RightOp: Fn(&L) -> SetTransmuteResult<K, ReduceT> + Clone,
+        K: HashLike<L>,
+        K: PartialEq<L>,
+        L: HashLike<K>,
+        L: PartialEq<K>,
+        M: HasherBv<H, L>,
+    {
+        let (set, reduced) = self.set.transform_with_transmuted(&right.set, reduce_op,
+            |l,_,r,_| both_op(l, r).into(),
+            |l,_| left_op(l).into(),
+            |r,_| match right_op(r) {
+                SetTransmuteResult::Transmuted(key, reduced) => MapTransmuteResult::Transmuted(key, (), reduced),
+                SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
+            });
+        (HashTrieSet{set}, reduced)
+    }
+
+    /// Run a transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations.
+    pub unsafe fn transmute_with_transformed<L: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+        (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (HashTrieSet<H, F, L, M>, ReduceT)
+        where
+        Self: Sized,
+        ReduceT: Default,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        BothOp: Fn(&K, &L) -> SetTransformResult<ReduceT> + Clone,
+        LeftOp: Fn(&K) -> SetTransmuteResult<L, ReduceT> + Clone,
+        RightOp: Fn(&L) -> SetTransformResult<ReduceT> + Clone,
+        K: HashLike<L>,
+        K: PartialEq<L>,
+        L: HashLike<K>,
+        L: PartialEq<K>,
+        M: HasherBv<H, L>,
+    {
+        let (set, reduced) = self.set.transmute_with_transformed(&right.set, reduce_op,
+            |l,_,r,_| both_op(l, r).into(),
+            |l,_| match left_op(l) {
+                SetTransmuteResult::Transmuted(key, reduced) => MapTransmuteResult::Transmuted(key, (), reduced),
+                SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
+            },
+            |r,_| right_op(r).into());
+        (HashTrieSet{set}, reduced)
+    }
+
+    /// Run a transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations.
+    pub unsafe fn transmute_with_transmuted<L: Key + HashLike<K>, S: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (HashTrieSet<H, F, S, M>, ReduceT)
         where
         Self: Sized,
@@ -163,7 +234,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         M: HasherBv<H, L>,
         M: HasherBv<H, S>,
     {
-        let (set, reduced) = self.set.joint_transmute(&right.set, reduce_op, |l,_,r,_| match both_op(l, r) {
+        let (set, reduced) = self.set.transmute_with_transmuted(&right.set, reduce_op, |l,_,r,_| match both_op(l, r) {
             SetTransmuteResult::Transmuted(key, reduced) => MapTransmuteResult::Transmuted(key, (), reduced),
             SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
         }, |l,_| match left_op(l) {

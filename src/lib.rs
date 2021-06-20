@@ -1,12 +1,8 @@
-#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(test), no_std)]
 
 #[allow(unused_imports)]
 #[macro_use]
 extern crate alloc;
-
-#[cfg(any(feature = "std", test))]
-#[macro_use]
-extern crate std;
 
 #[macro_use]
 mod result;
@@ -32,11 +28,9 @@ pub use result::MapTransmuteResult as MapTransmuteResult;
 pub use set::HashTrieSet as HashTrieSet;
 pub use map::HashTrieMap as HashTrieMap;
 
-#[cfg(any(feature = "std", test))]
-pub type DefaultHashTrieSet<V> = set::HashTrieSet<u64, u32, V, std::collections::hash_map::DefaultHasher>;
+pub type DefaultHashTrieSet<V> = set::HashTrieSet<u64, u32, V, fnv::FnvHasher>;
 
-#[cfg(any(feature = "std", test))]
-pub type DefaultHashTrieMap<K, V> = map::HashTrieMap<u64, u32, K, V, std::collections::hash_map::DefaultHasher>;
+pub type DefaultHashTrieMap<K, V> = map::HashTrieMap<u64, u32, K, V, fnv::FnvHasher>;
 
 #[cfg(test)]
 mod tests {
@@ -44,7 +38,7 @@ mod tests {
     use alloc::string::String;
 
     #[test]
-    fn std_test() {
+    fn default_test() {
         let _hash_set = DefaultHashTrieSet::<i32>::new().insert(42, false);
         let _hash_map = DefaultHashTrieMap::<i32, String>::new().insert(42, "Hello, world!", false);
     }

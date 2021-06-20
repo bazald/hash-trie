@@ -4,10 +4,10 @@ HashTrie provides containers based on Hash Array Mapped Tries (HAMT). They are c
 
 `HashTrieSet` implements a hash set. Here's a quick usage example.
 ```
+use fnv::FnvHasher;
 use hash_trie::HashTrieSet;
-use std::collections::hash_map::DefaultHasher;
 
-let mut hash_set: HashTrieSet<u64, u32, String, DefaultHasher> = HashTrieSet::new();
+let mut hash_set: HashTrieSet<u64, u32, String, FnvHasher> = HashTrieSet::new();
 let hello_world: String = "Hello, world!".into();
 
 hash_set = hash_set.insert(&hello_world, false).unwrap().0;

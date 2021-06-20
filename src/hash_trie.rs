@@ -79,7 +79,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         }
     }
 
-    pub(crate) fn transmute<S: Key, X: Value, ReduceT, ReduceOp, Op>
+    pub(crate) unsafe fn transmute<S: Key, X: Value, ReduceT, ReduceOp, Op>
         (&self, reduce_op: ReduceOp, op: Op) -> (HashTrie<H, F, S, X, M>, ReduceT)
         where
         Self: Sized,
@@ -98,7 +98,75 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         }
     }
 
-    pub(crate) fn joint_transmute<L: Key, W: Value, S: Key, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub(crate) fn transform_with_transformed<ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+        (&self, right: &Self, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (Self, ReduceT)
+        where
+        Self: Sized,
+        ReduceT: Default,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        BothOp: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
+        RightOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
+    {
+        match self.root.transform_with_transformed(&right.root, reduce_op, both_op, left_op, right_op, 0) {
+            MNodeJointTransformResult::UnchangedLR(reduced) | MNodeJointTransformResult::UnchangedL(reduced) => (self.clone(), reduced),
+            MNodeJointTransformResult::UnchangedR(reduced) => (right.clone(), reduced),
+            MNodeJointTransformResult::C(cnode, reduced) => (HashTrie::singleton(MNode::C(cnode)), reduced),
+            MNodeJointTransformResult::L(lnode, reduced) => (HashTrie::singleton(MNode::L(lnode)), reduced),
+            MNodeJointTransformResult::S(snode, reduced) => (HashTrie::singleton(MNode::S(snode)), reduced),
+            MNodeJointTransformResult::Removed(reduced) => (HashTrie::default(), reduced),
+        }
+    }
+
+    pub(crate) unsafe fn transform_with_transmuted<L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (Self, ReduceT)
+        where
+        Self: Sized,
+        ReduceT: Default,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<V, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
+        RightOp: Fn(&L, &W) -> MapTransmuteResult<K, V, ReduceT> + Clone,
+        K: HashLike<L>,
+        K: PartialEq<L>,
+        L: HashLike<K>,
+        L: PartialEq<K>,
+        M: HasherBv<H, L>,
+    {
+        match self.root.transform_with_transmuted(&right.root, reduce_op, both_op, left_op, right_op, 0) {
+            MNodeTransformResult::Unchanged(reduced) => (self.clone(), reduced),
+            MNodeTransformResult::C(cnode, reduced) => (HashTrie::singleton(MNode::C(cnode)), reduced),
+            MNodeTransformResult::L(lnode, reduced) => (HashTrie::singleton(MNode::L(lnode)), reduced),
+            MNodeTransformResult::S(snode, reduced) => (HashTrie::singleton(MNode::S(snode)), reduced),
+            MNodeTransformResult::Removed(reduced) => (HashTrie::default(), reduced),
+        }
+    }
+
+    pub(crate) unsafe fn transmute_with_transformed<L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (HashTrie<H, F, L, W, M>, ReduceT)
+        where
+        Self: Sized,
+        ReduceT: Default,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<W, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransmuteResult<L, W, ReduceT> + Clone,
+        RightOp: Fn(&L, &W) -> MapTransformResult<W, ReduceT> + Clone,
+        K: HashLike<L>,
+        K: PartialEq<L>,
+        L: HashLike<K>,
+        L: PartialEq<K>,
+        M: HasherBv<H, L>,
+    {
+        match self.root.transmute_with_transformed(&right.root, reduce_op, both_op, left_op, right_op, 0) {
+            MNodeTransformResult::Unchanged(reduced) => (right.clone(), reduced),
+            MNodeTransformResult::C(cnode, reduced) => (HashTrie::singleton(MNode::C(cnode)), reduced),
+            MNodeTransformResult::L(lnode, reduced) => (HashTrie::singleton(MNode::L(lnode)), reduced),
+            MNodeTransformResult::S(snode, reduced) => (HashTrie::singleton(MNode::S(snode)), reduced),
+            MNodeTransformResult::Removed(reduced) => (HashTrie::default(), reduced),
+        }
+    }
+
+    pub(crate) unsafe fn transmute_with_transmuted<L: Key, W: Value, S: Key, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (HashTrie<H, F, S, X, M>, ReduceT)
         where
         Self: Sized,
@@ -118,7 +186,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         M: HasherBv<H, L>,
         M: HasherBv<H, S>,
     {
-        match self.root.joint_transmute(&right.root, reduce_op, both_op, left_op, right_op, 0) {
+        match self.root.transmute_with_transmuted(&right.root, reduce_op, both_op, left_op, right_op, 0) {
             MNodeTransmuteResult::C(cnode, reduced) => (HashTrie::singleton(MNode::C(cnode)), reduced),
             MNodeTransmuteResult::L(lnode, reduced) => (HashTrie::singleton(MNode::L(lnode)), reduced),
             MNodeTransmuteResult::S(snode, reduced) => (HashTrie::singleton(MNode::S(snode)), reduced),

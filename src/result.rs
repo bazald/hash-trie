@@ -151,6 +151,15 @@ pub enum MapTransformResult<V, ReduceT> {
     Removed(ReduceT),
 }
 
+impl <V, ReduceT> From<SetTransformResult<ReduceT>> for MapTransformResult<V, ReduceT> {
+    fn from(other: SetTransformResult<ReduceT>) -> Self {
+        match other {
+            SetTransformResult::Unchanged(reduced) => MapTransformResult::Unchanged(reduced),
+            SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
+        }
+    }
+}
+
 /// MapJointTransformResult is the result of a transform operation on a pair of entries of a map.
 #[must_use]
 pub enum MapJointTransformResult<V, ReduceT> {
@@ -164,6 +173,29 @@ pub enum MapJointTransformResult<V, ReduceT> {
     Transformed(V, ReduceT),
     /// The key-value pair was removed.
     Removed(ReduceT),
+}
+
+impl <V, ReduceT> MapJointTransformResult<V, ReduceT> {
+    pub(crate) fn flip(self) -> Self {
+        match self {
+            Self::UnchangedLR(reduced) => Self::UnchangedLR(reduced),
+            Self::UnchangedL(reduced) => Self::UnchangedR(reduced),
+            Self::UnchangedR(reduced) => Self::UnchangedL(reduced),
+            Self::Transformed(value, reduced) => Self::Transformed(value, reduced),
+            Self::Removed(reduced) => Self::Removed(reduced),
+        }
+    }
+}
+
+impl <V, ReduceT> From<SetJointTransformResult<ReduceT>> for MapJointTransformResult<V, ReduceT> {
+    fn from(other: SetJointTransformResult<ReduceT>) -> Self {
+        match other {
+            SetJointTransformResult::UnchangedLR(reduced) => MapJointTransformResult::UnchangedLR(reduced),
+            SetJointTransformResult::UnchangedL(reduced) => MapJointTransformResult::UnchangedL(reduced),
+            SetJointTransformResult::UnchangedR(reduced) => MapJointTransformResult::UnchangedR(reduced),
+            SetJointTransformResult::Removed(reduced) => MapJointTransformResult::Removed(reduced),
+        }
+    }
 }
 
 /// MapTransmuteResult is the result of a transmute operation on a single entry of a map or a pair of entries of a map.
@@ -195,12 +227,37 @@ pub(crate) enum MNodeJointTransformResult<H: Hashword, F: Flagword<H>, K: Key, V
     Removed(ReduceT),
 }
 
+impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> MNodeJointTransformResult<H, F, K, V, M, ReduceT> {
+    pub(crate) fn flip(self) -> Self {
+        match self {
+            Self::UnchangedLR(reduced) => Self::UnchangedLR(reduced),
+            Self::UnchangedL(reduced) => Self::UnchangedR(reduced),
+            Self::UnchangedR(reduced) => Self::UnchangedL(reduced),
+            Self::C(cnode, reduced) => Self::C(cnode, reduced),
+            Self::L(lnode, reduced) => Self::L(lnode, reduced),
+            Self::S(snode, reduced) => Self::S(snode, reduced),
+            Self::Removed(reduced) => Self::Removed(reduced),
+        }
+    }
+}
+
 #[must_use]
 pub(crate) enum MNodeTransmuteResult<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> {
     C(CNode<H, F, K, V, M>, ReduceT),
     L(Arc<LNode<K, V>>, ReduceT),
     S(Arc<SNode<K, V>>, ReduceT),
     Removed(ReduceT),
+}
+
+impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> From<MNodeTransmuteResult<H, F, K, V, M, ReduceT>> for MNodeTransformResult<H, F, K, V, M, ReduceT> {
+    fn from(other: MNodeTransmuteResult<H, F, K, V, M, ReduceT>) -> Self {
+        match other {
+            MNodeTransmuteResult::C(cnode, reduced) => MNodeTransformResult::C(cnode, reduced),
+            MNodeTransmuteResult::L(lnode, reduced) => MNodeTransformResult::L(lnode, reduced),
+            MNodeTransmuteResult::S(snode, reduced) => MNodeTransformResult::S(snode, reduced),
+            MNodeTransmuteResult::Removed(reduced) => MNodeTransformResult::Removed(reduced),
+        }
+    }
 }
 
 #[must_use]
@@ -250,6 +307,16 @@ pub(crate) enum LNodeTransmuteResult<K: Key, V: Value, ReduceT> {
     L(Arc<LNode<K, V>>, ReduceT),
     S(Arc<SNode<K, V>>, ReduceT),
     Removed(ReduceT),
+}
+
+impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> From<LNodeTransmuteResult<K, V, ReduceT>> for MNodeTransformResult<H, F, K, V, M, ReduceT> {
+    fn from(other: LNodeTransmuteResult<K, V, ReduceT>) -> Self {
+        match other {
+            LNodeTransmuteResult::L(lnode, reduced) => MNodeTransformResult::L(lnode, reduced),
+            LNodeTransmuteResult::S(snode, reduced) => MNodeTransformResult::S(snode, reduced),
+            LNodeTransmuteResult::Removed(reduced) => MNodeTransformResult::Removed(reduced),
+        }
+    }
 }
 
 impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> From<LNodeTransmuteResult<K, V, ReduceT>> for MNodeTransmuteResult<H, F, K, V, M, ReduceT> {
@@ -308,42 +375,18 @@ impl <K: Key, V: Value, ReduceT> From<SNodeTransformResult<K, V, ReduceT>> for L
 }
 
 #[must_use]
-pub(crate) enum SNodeJointTransformResult<K: Key, V: Value, ReduceT> {
-    UnchangedLR(ReduceT),
-    UnchangedL(ReduceT),
-    UnchangedR(ReduceT),
-    S(Arc<SNode<K, V>>, ReduceT),
-    Removed(ReduceT),
-}
-
-impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> From<SNodeJointTransformResult<K, V, ReduceT>> for MNodeJointTransformResult<H, F, K, V, M, ReduceT> {
-    fn from(other: SNodeJointTransformResult<K, V, ReduceT>) -> Self {
-        match other {
-            SNodeJointTransformResult::UnchangedLR(reduced) => MNodeJointTransformResult::UnchangedLR(reduced),
-            SNodeJointTransformResult::UnchangedL(reduced) => MNodeJointTransformResult::UnchangedL(reduced),
-            SNodeJointTransformResult::UnchangedR(reduced) => MNodeJointTransformResult::UnchangedR(reduced),
-            SNodeJointTransformResult::S(snode, reduced) => MNodeJointTransformResult::S(snode, reduced),
-            SNodeJointTransformResult::Removed(reduced) => MNodeJointTransformResult::Removed(reduced),
-        }
-    }
-}
-
-impl <K: Key, V: Value, ReduceT> From<SNodeJointTransformResult<K, V, ReduceT>> for LNodeJointTransformResult<K, V, ReduceT> {
-    fn from(other: SNodeJointTransformResult<K, V, ReduceT>) -> Self {
-        match other {
-            SNodeJointTransformResult::UnchangedLR(reduced) => LNodeJointTransformResult::UnchangedLR(reduced),
-            SNodeJointTransformResult::UnchangedL(reduced) => LNodeJointTransformResult::UnchangedL(reduced),
-            SNodeJointTransformResult::UnchangedR(reduced) => LNodeJointTransformResult::UnchangedR(reduced),
-            SNodeJointTransformResult::S(snode, reduced) => LNodeJointTransformResult::S(snode, reduced),
-            SNodeJointTransformResult::Removed(reduced) => LNodeJointTransformResult::Removed(reduced),
-        }
-    }
-}
-
-#[must_use]
 pub(crate) enum SNodeTransmuteResult<K: Key, V: Value, ReduceT> {
     S(Arc<SNode<K, V>>, ReduceT),
     Removed(ReduceT),
+}
+
+impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> From<SNodeTransmuteResult<K, V, ReduceT>> for MNodeTransformResult<H, F, K, V, M, ReduceT> {
+    fn from(other: SNodeTransmuteResult<K, V, ReduceT>) -> Self {
+        match other {
+            SNodeTransmuteResult::S(snode, reduced) => MNodeTransformResult::S(snode, reduced),
+            SNodeTransmuteResult::Removed(reduced) => MNodeTransformResult::Removed(reduced),
+        }
+    }
 }
 
 impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static, ReduceT> From<SNodeTransmuteResult<K, V, ReduceT>> for MNodeTransmuteResult<H, F, K, V, M, ReduceT> {
