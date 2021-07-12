@@ -140,7 +140,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         (HashTrieMap{set}, reduced)
     }
 
-    /// Run a transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations.
+    /// Run a transform operation on each entry or pair of entries in the maps. Returns the transformed map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from either map.
     pub fn transform_with_transformed<ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &Self, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (Self, ReduceT)
         where
@@ -155,7 +155,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         (HashTrieMap{set}, reduced)
     }
 
-    /// Run a transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations.
+    /// Run a transform/transmute operation on each entry or pair of entries in the maps. Returns the transmuted map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed map. Like transform_with_transmuted but enforces identity transformations on keys.
     pub fn transform_with_transfuted<W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieMap<H, F, K, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (Self, ReduceT)
         where
@@ -175,7 +175,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         (HashTrieMap{set}, reduced)
     }
 
-    /// Run a transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations.
+    /// Run a transform/transmute operation on each entry or pair of entries in the maps. Returns the transmuted map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed map.
     pub unsafe fn transform_with_transmuted<L: Key + HashLike<K>, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieMap<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (Self, ReduceT)
         where
@@ -195,7 +195,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         (HashTrieMap{set}, reduced)
     }
 
-    /// Run a transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations.
+    /// Run a transmute/transform operation on each entry or pair of entries in the maps. Returns the transmuted map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed map. Like transmute_with_transformed but enforces identity transformations on keys.
     pub fn transfute_with_transformed<W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieMap<H, F, K, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (HashTrieMap<H, F, K, W, M>, ReduceT)
         where
@@ -215,7 +215,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         (HashTrieMap{set}, reduced)
     }
 
-    /// Run a transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations.
+    /// Run a transmute/transform operation on each entry or pair of entries in the maps. Returns the transmuted map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed map.
     pub unsafe fn transmute_with_transformed<L: Key + HashLike<K>, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieMap<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (HashTrieMap<H, F, L, W, M>, ReduceT)
         where
@@ -235,7 +235,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         (HashTrieMap{set}, reduced)
     }
 
-    /// Run a transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations.
+    /// Run a transmute operation on each entry or pair of entries in the maps. Returns the transmuted map and a reduction of the secondary returns of the transmute operations.
     pub unsafe fn transmute_with_transmuted<L: Key + HashLike<K>, W: Value, S: Key + HashLike<K>, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieMap<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (HashTrieMap<H, F, S, X, M>, ReduceT)
         where
@@ -279,6 +279,29 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> PartialE
 #[cfg(test)]
 mod tests {
     use crate::*;
+    use rand::Rng;
+    
+    #[test]
+    fn map_transform() {
+        let mut map = DefaultHashTrieMap::<i32, i32>::new();
+        let mut squared = DefaultHashTrieMap::<i32, i32>::new();
+
+        for i in 1..101 {
+            map = map.insert(i, i, false).unwrap().0;
+            squared = squared.insert(i, i * i, false).unwrap().0;
+        }
+
+        let removed = map.transform(|_,_| (), |_,_| MapTransformResult::Removed(()));
+        let tsquared = map.transform(|_,_| (), |_,v| MapTransformResult::Transformed(v * v, ()));
+
+        assert_eq!(removed.0.size(), 0);
+
+        for i in 1..101 {
+            map.find(&i).unwrap();
+            assert_eq!(i * i, *squared.find(&i).unwrap().1);
+            assert_eq!(i * i, *tsquared.0.find(&i).unwrap().1);
+        }
+    }
     
     #[test]
     fn map_transmute() {
@@ -290,7 +313,7 @@ mod tests {
             squared = squared.insert(i, i * i, false).unwrap().0;
         }
 
-        let removed = map.transform(|_,_| (), |_,_| MapTransformResult::Removed(()));
+        let removed: (DefaultHashTrieMap::<i32, i32>, ()) = unsafe { map.transmute(|_,_| (), |_,_| MapTransmuteResult::Removed(())) };
         let tsquared = unsafe { map.transmute(|_,_| (), |k,v| MapTransmuteResult::Transmuted(*k, v * v, ())) };
 
         assert_eq!(removed.0.size(), 0);
@@ -302,4 +325,42 @@ mod tests {
         }
     }
     
+    #[test]
+    fn map_joint_transformations() {
+        let mut mapa = DefaultHashTrieMap::<i32, i32>::new();
+        let mut mapb = DefaultHashTrieMap::<i32, i32>::new();
+
+        let mut rng = rand::thread_rng();
+        let a = (0..25000).map(|_| rng.gen_range(0..100000)).collect::<Vec<i32>>();
+        let b = (0..25000).map(|_| rng.gen_range(0..100000)).collect::<Vec<i32>>();
+        for i in a {
+            mapa = mapa.insert(i, i, true).unwrap().0;
+        }
+        for i in b {
+            mapb = mapb.insert(i, i, true).unwrap().0;
+        }
+
+        let ff = mapa.transform_with_transformed(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
+            |_,v,_,w| MapJointTransformResult::Removed(v.wrapping_mul(*w)), |_,v| MapTransformResult::Unchanged(*v), |_,v| MapTransformResult::Unchanged(*v));
+        let fm = unsafe { mapa.transform_with_transmuted(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
+            |_,v,_,w| MapTransformResult::Removed(v.wrapping_mul(*w)), |_,v| MapTransformResult::Unchanged(*v), |k,v| MapTransmuteResult::Transmuted(*k, *v, *v)) };
+        let mf = unsafe { mapa.transmute_with_transformed(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
+            |_,v,_,w| MapTransformResult::Removed(v.wrapping_mul(*w)), |k,v| MapTransmuteResult::Transmuted(*k, *v, *v), |_,v| MapTransformResult::Unchanged(*v)) };
+        let mm = unsafe { mapa.transmute_with_transmuted(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
+            |_,v,_,w| MapTransmuteResult::Removed(v.wrapping_mul(*w)), |k,v| MapTransmuteResult::Transmuted(*k, *v, *v), |k,v| MapTransmuteResult::Transmuted(*k, *v, *v)) };
+
+        assert_eq!(ff.1, fm.1);
+        assert_eq!(ff.1, mf.1);
+        assert_eq!(ff.1, mm.1);
+
+        let ffx = ff.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, |_,v| MapTransformResult::Removed(*v));
+        let fmx = fm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, |_,v| MapTransformResult::Removed(*v));
+        let mfx = mf.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, |_,v| MapTransformResult::Removed(*v));
+        let mmx = mm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, |_,v| MapTransformResult::Removed(*v));
+
+        assert_eq!(ffx.1, fmx.1);
+        assert_eq!(ffx.1, mfx.1);
+        assert_eq!(ffx.1, mmx.1);
+    }
+
 }

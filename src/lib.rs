@@ -28,8 +28,10 @@ pub use result::MapTransmuteResult as MapTransmuteResult;
 pub use set::HashTrieSet as HashTrieSet;
 pub use map::HashTrieMap as HashTrieMap;
 
+/// A HashTrieSet using 64-bit hashes, 32-bit flags, and FnvHasher
 pub type DefaultHashTrieSet<V> = set::HashTrieSet<u64, u32, V, fnv::FnvHasher>;
 
+/// A HashTrieMap using 64-bit hashes, 32-bit flags, and FnvHasher
 pub type DefaultHashTrieMap<K, V> = map::HashTrieMap<u64, u32, K, V, fnv::FnvHasher>;
 
 #[cfg(test)]
