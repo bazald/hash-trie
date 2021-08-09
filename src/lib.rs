@@ -8,6 +8,8 @@ extern crate alloc;
 mod result;
 mod bit_indexed_array;
 mod flag;
+#[macro_use]
+mod functions;
 mod hash_trie;
 mod map;
 mod node;
@@ -16,6 +18,14 @@ pub mod traits;
 
 pub use result::BitError as BitError;
 pub use result::HashTrieError as HashTrieError;
+
+pub use functions::SetJointTransform as SetJointTransform;
+pub use functions::SetTransform as SetTransform;
+pub use functions::SetTransmute as SetTransmute;
+
+pub use functions::MapJointTransform as MapJointTransform;
+pub use functions::MapTransform as MapTransform;
+pub use functions::MapTransmute as MapTransmute;
 
 pub use result::SetTransformResult as SetTransformResult;
 pub use result::SetJointTransformResult as SetJointTransformResult;

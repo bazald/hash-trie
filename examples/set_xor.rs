@@ -1,5 +1,8 @@
+#[macro_use]
+extern crate hash_trie;
+
 use fnv::FnvHasher;
-use hash_trie::{HashTrieSet, SetJointTransformResult, SetTransformResult, SetTransmuteResult};
+use hash_trie::{HashTrieSet, SetJointTransform, SetTransform, SetTransmute, SetJointTransformResult, SetTransformResult, SetTransmuteResult};
 use im::HashSet as ImHashSet;
 use std::{collections::{hash_set::HashSet}, sync::{Arc, Mutex}, time::SystemTime, vec::Vec};
 use rand::Rng;
@@ -88,9 +91,9 @@ fn hash_trie_set_transform_with_transformed(lefts: &[i32], rights: &[i32], xored
     let hash_set = left.transform_with_transformed(
         &right, 
         |_,_| (), 
-        |_,_| SetJointTransformResult::Removed(()),
-        |_| SetTransformResult::Unchanged(()),
-        |_| SetTransformResult::Unchanged(())).0;
+        new_removed_set_joint_transform!(()),
+        new_unchanged_set_transform!(()),
+        new_unchanged_set_transform!(())).0;
 
     let t1 = SystemTime::now();
     
@@ -124,8 +127,8 @@ fn hash_trie_set_transform_with_transmuted(lefts: &[i32], rights: &[i32], xored:
         &right, 
         |_,_| (), 
         |_,_| SetTransformResult::Removed(()),
-        |_| SetTransformResult::Unchanged(()),
-        |r| SetTransmuteResult::Transmuted(*r, ())).0 };
+        new_unchanged_set_transform!(()),
+        new_generic_set_transmute!(|r| SetTransmuteResult::Transmuted(*r, ()))).0 };
 
     let t1 = SystemTime::now();
     
@@ -159,8 +162,8 @@ fn hash_trie_set_transmute_with_transformed(lefts: &[i32], rights: &[i32], xored
         &right, 
         |_,_| (), 
         |_,_| SetTransformResult::Removed(()),
-        |l| SetTransmuteResult::Transmuted(*l, ()),
-        |_| SetTransformResult::Unchanged(())).0 };
+        new_generic_set_transmute!(|l| SetTransmuteResult::Transmuted(*l, ())),
+        new_unchanged_set_transform!(())).0 };
 
     let t1 = SystemTime::now();
     
@@ -194,8 +197,8 @@ fn hash_trie_set_transmute_with_transmuted(lefts: &[i32], rights: &[i32], xored:
         &right, 
         |_,_| (), 
         |_,_| SetTransmuteResult::Removed(()),
-        |l| SetTransmuteResult::Transmuted(*l, ()),
-        |r| SetTransmuteResult::Transmuted(*r, ())).0 };
+        new_generic_set_transmute!(|l| SetTransmuteResult::Transmuted(*l, ())),
+        new_generic_set_transmute!(|r| SetTransmuteResult::Transmuted(*r, ()))).0 };
 
     let t1 = SystemTime::now();
     

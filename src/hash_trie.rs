@@ -1,4 +1,4 @@
-use crate::{flag::*, traits::*, node::*, result::*, HashTrieError};
+use crate::{flag::*, functions::*, traits::*, node::*, result::*, HashTrieError};
 use alloc::{fmt::Debug};
 use core::hash::Hash;
 
@@ -63,10 +63,10 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     pub(crate) fn transform<ReduceT, ReduceOp, Op>
-        (&self, reduce_op: ReduceOp, op: Op) -> (Self, ReduceT)
+        (&self, reduce_op: ReduceOp, op: MapTransform<ReduceT, Op>) -> (Self, ReduceT)
         where
         Self: Sized,
-        ReduceT: Default,
+        ReduceT: Clone + Default,
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
         Op: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
     {
@@ -80,10 +80,10 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     pub(crate) unsafe fn transmute<S: Key, X: Value, ReduceT, ReduceOp, Op>
-        (&self, reduce_op: ReduceOp, op: Op) -> (HashTrie<H, F, S, X, M>, ReduceT)
+        (&self, reduce_op: ReduceOp, op: MapTransmute<ReduceT, Op>) -> (HashTrie<H, F, S, X, M>, ReduceT)
         where
         Self: Sized,
-        ReduceT: Default,
+        ReduceT: Clone + Default,
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
         Op: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,
         K: HashLike<S>,
@@ -99,10 +99,10 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     pub(crate) fn transform_with_transformed<ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &Self, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (Self, ReduceT)
+        (&self, right: &Self, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>) -> (Self, ReduceT)
         where
         Self: Sized,
-        ReduceT: Default,
+        ReduceT: Clone + Default,
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
         BothOp: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone,
         LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
@@ -119,10 +119,10 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     pub(crate) unsafe fn transform_with_transmuted<L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (Self, ReduceT)
+        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> (Self, ReduceT)
         where
         Self: Sized,
-        ReduceT: Default,
+        ReduceT: Clone + Default,
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
         BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<V, ReduceT> + Clone,
         LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
@@ -143,10 +143,10 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     pub(crate) unsafe fn transmute_with_transformed<L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (HashTrie<H, F, L, W, M>, ReduceT)
+        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>) -> (HashTrie<H, F, L, W, M>, ReduceT)
         where
         Self: Sized,
-        ReduceT: Default,
+        ReduceT: Clone + Default,
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
         BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<W, ReduceT> + Clone,
         LeftOp: Fn(&K, &V) -> MapTransmuteResult<L, W, ReduceT> + Clone,
@@ -167,10 +167,10 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     pub(crate) unsafe fn transmute_with_transmuted<L: Key, W: Value, S: Key, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: LeftOp, right_op: RightOp) -> (HashTrie<H, F, S, X, M>, ReduceT)
+        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> (HashTrie<H, F, S, X, M>, ReduceT)
         where
         Self: Sized,
-        ReduceT: Default,
+        ReduceT: Clone + Default,
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
         BothOp: Fn(&K, &V, &L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
         LeftOp: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,

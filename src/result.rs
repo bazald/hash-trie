@@ -131,6 +131,17 @@ pub enum SetJointTransformResult<ReduceT> {
     Removed(ReduceT),
 }
 
+impl <ReduceT> SetJointTransformResult<ReduceT> {
+    pub(crate) fn flip(self) -> Self {
+        match self {
+            Self::UnchangedLR(reduced) => Self::UnchangedLR(reduced),
+            Self::UnchangedL(reduced) => Self::UnchangedR(reduced),
+            Self::UnchangedR(reduced) => Self::UnchangedL(reduced),
+            Self::Removed(reduced) => Self::Removed(reduced),
+        }
+    }
+}
+
 /// SetTransmuteResult is the result of a transmute operation on a single entry or pair of entries of a set.
 #[must_use]
 pub enum SetTransmuteResult<K, ReduceT> {
