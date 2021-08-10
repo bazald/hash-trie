@@ -1,8 +1,5 @@
-#[macro_use]
-extern crate hash_trie;
-
 use fnv::FnvHasher;
-use hash_trie::{HashTrieSet, SetJointTransform, SetTransform, SetTransmute, SetJointTransformResult, SetTransformResult, SetTransmuteResult};
+use hash_trie::{*, functions::*};
 use im::HashSet as ImHashSet;
 use std::{collections::{hash_set::HashSet}, sync::{Arc, Mutex}, time::SystemTime, vec::Vec};
 use rand::Rng;
@@ -91,9 +88,9 @@ fn hash_trie_set_transform_with_transformed(lefts: &[i32], rights: &[i32], xored
     let hash_set = left.transform_with_transformed(
         &right, 
         |_,_| (), 
-        new_removed_set_joint_transform!(()),
-        new_unchanged_set_transform!(()),
-        new_unchanged_set_transform!(())).0;
+        new_set_joint_transform_removed(()),
+        new_set_transform_unchanged(()),
+        new_set_transform_unchanged(())).0;
 
     let t1 = SystemTime::now();
     
@@ -126,9 +123,9 @@ fn hash_trie_set_transform_with_transmuted(lefts: &[i32], rights: &[i32], xored:
     let hash_set = unsafe { left.transform_with_transmuted(
         &right, 
         |_,_| (), 
-        |_,_| SetTransformResult::Removed(()),
-        new_unchanged_set_transform!(()),
-        new_generic_set_transmute!(|r| SetTransmuteResult::Transmuted(*r, ()))).0 };
+        new_set_transform_transmute_removed(()),
+        new_set_transform_unchanged(()),
+        new_set_transmute_generic(|r| SetTransmuteResult::Transmuted(*r, ()))).0 };
 
     let t1 = SystemTime::now();
     
@@ -161,9 +158,9 @@ fn hash_trie_set_transmute_with_transformed(lefts: &[i32], rights: &[i32], xored
     let hash_set = unsafe { left.transmute_with_transformed(
         &right, 
         |_,_| (), 
-        |_,_| SetTransformResult::Removed(()),
-        new_generic_set_transmute!(|l| SetTransmuteResult::Transmuted(*l, ())),
-        new_unchanged_set_transform!(())).0 };
+        new_set_transform_transmute_removed(()),
+        new_set_transmute_generic(|l| SetTransmuteResult::Transmuted(*l, ())),
+        new_set_transform_unchanged(())).0 };
 
     let t1 = SystemTime::now();
     
@@ -196,9 +193,9 @@ fn hash_trie_set_transmute_with_transmuted(lefts: &[i32], rights: &[i32], xored:
     let hash_set = unsafe {left.transmute_with_transmuted(
         &right, 
         |_,_| (), 
-        |_,_| SetTransmuteResult::Removed(()),
-        new_generic_set_transmute!(|l| SetTransmuteResult::Transmuted(*l, ())),
-        new_generic_set_transmute!(|r| SetTransmuteResult::Transmuted(*r, ()))).0 };
+        new_set_transmute_transmute_removed(()),
+        new_set_transmute_generic(|l| SetTransmuteResult::Transmuted(*l, ())),
+        new_set_transmute_generic(|r| SetTransmuteResult::Transmuted(*r, ()))).0 };
 
     let t1 = SystemTime::now();
     

@@ -10,31 +10,6 @@ pub enum MapJointTransform<ReduceT, F> {
 }
 
 impl <ReduceT: Clone, F: Clone> MapJointTransform<ReduceT, F> {
-    pub fn new_generic<K, V>(f: F, flipped: bool) -> MapJointTransform<ReduceT, F> where F: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT>
-    {
-        MapJointTransform::Generic(f, flipped)
-    }
-
-    pub fn new_unchangedlr<K, V>(r: ReduceT, _f: F) -> MapJointTransform<ReduceT, F> where F: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT>
-    {
-        MapJointTransform::<ReduceT, F>::UnchangedLR(r)
-    }
-
-    pub fn new_unchangedl<K, V>(r: ReduceT, _f: F) -> MapJointTransform<ReduceT, F> where F: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT>
-    {
-        MapJointTransform::<ReduceT, F>::UnchangedL(r)
-    }
-
-    pub fn new_unchangedr<K, V>(r: ReduceT, _f: F) -> MapJointTransform<ReduceT, F> where F: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT>
-    {
-        MapJointTransform::<ReduceT, F>::UnchangedR(r)
-    }
-
-    pub fn new_removed<K, V>(r: ReduceT, _f: F) -> MapJointTransform<ReduceT, F> where F: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT>
-    {
-        MapJointTransform::<ReduceT, F>::Removed(r)
-    }
-
     pub fn call<K, V>(&self, k: &K, v: &V, l: &K, w: &V) -> MapJointTransformResult<V, ReduceT> where F: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT>
     {
         match self {
@@ -65,39 +40,24 @@ impl <ReduceT: Clone, F: Clone> MapJointTransform<ReduceT, F> {
     }
 }
 
-#[macro_export]
-macro_rules! new_generic_map_joint_transform {
-    ( $f:expr ) => {
-        MapJointTransform::new_generic($f, false)
-    };
+pub fn new_map_joint_transform_generic<K, V, ReduceT: Clone, F: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone>(f: F) -> MapJointTransform<ReduceT, F> {
+    MapJointTransform::Generic(f, false)
 }
 
-#[macro_export]
-macro_rules! new_unchangedlr_map_joint_transform {
-    ( $r:expr ) => {
-        MapJointTransform::new_unchanged($r, |_,_,_,_| MapJointTransformResult::UnchangedLR($r))
-    };
+pub fn new_map_joint_transform_unchangedlr<K, V, ReduceT: Clone>(r: ReduceT) -> MapJointTransform<ReduceT, fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT>> {
+    MapJointTransform::UnchangedLR(r)
 }
 
-#[macro_export]
-macro_rules! new_unchangedl_map_joint_transform {
-    ( $r:expr ) => {
-        MapJointTransform::new_unchanged($r, |_,_,_,_| MapJointTransformResult::UnchangedL($r))
-    };
+pub fn new_map_joint_transform_unchangedl<K, V, ReduceT: Clone>(r: ReduceT) -> MapJointTransform<ReduceT, fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT>> {
+    MapJointTransform::UnchangedL(r)
 }
 
-#[macro_export]
-macro_rules! new_unchangedr_map_joint_transform {
-    ( $r:expr ) => {
-        MapJointTransform::new_unchanged($r, |_,_,_,_| MapJointTransformResult::UnchangedR($r))
-    };
+pub fn new_map_joint_transform_unchangedr<K, V, ReduceT: Clone>(r: ReduceT) -> MapJointTransform<ReduceT, fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT>> {
+    MapJointTransform::UnchangedR(r)
 }
 
-#[macro_export]
-macro_rules! new_removed_map_joint_transform {
-    ( $r:expr ) => {
-        MapJointTransform::new_removed($r, |_,_,_,_| MapJointTransformResult::Removed($r))
-    };
+pub fn new_map_joint_transform_removed<K, V, ReduceT: Clone>(r: ReduceT) -> MapJointTransform<ReduceT, fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT>> {
+    MapJointTransform::Removed(r)
 }
 
 #[derive(Clone)]
@@ -110,31 +70,6 @@ pub enum SetJointTransform<ReduceT, F> {
 }
 
 impl <ReduceT: Clone, F: Clone> SetJointTransform<ReduceT, F> {
-    pub fn new_generic<K>(f: F, flipped: bool) -> SetJointTransform<ReduceT, F> where F: Fn(&K, &K) -> SetJointTransformResult<ReduceT>
-    {
-        SetJointTransform::Generic(f, flipped)
-    }
-
-    pub fn new_unchangedlr<K>(r: ReduceT, _f: F) -> SetJointTransform<ReduceT, F> where F: Fn(&K, &K) -> SetJointTransformResult<ReduceT>
-    {
-        SetJointTransform::<ReduceT, F>::UnchangedLR(r)
-    }
-
-    pub fn new_unchangedl<K>(r: ReduceT, _f: F) -> SetJointTransform<ReduceT, F> where F: Fn(&K, &K) -> SetJointTransformResult<ReduceT>
-    {
-        SetJointTransform::<ReduceT, F>::UnchangedL(r)
-    }
-
-    pub fn new_unchangedr<K>(r: ReduceT, _f: F) -> SetJointTransform<ReduceT, F> where F: Fn(&K, &K) -> SetJointTransformResult<ReduceT>
-    {
-        SetJointTransform::<ReduceT, F>::UnchangedR(r)
-    }
-
-    pub fn new_removed<K>(r: ReduceT, _f: F) -> SetJointTransform<ReduceT, F> where F: Fn(&K, &K) -> SetJointTransformResult<ReduceT>
-    {
-        SetJointTransform::<ReduceT, F>::Removed(r)
-    }
-
     pub fn call<K>(&self, k: &K, l: &K) -> SetJointTransformResult<ReduceT> where F: Fn(&K, &K) -> SetJointTransformResult<ReduceT>
     {
         match self {
@@ -165,39 +100,24 @@ impl <ReduceT: Clone, F: Clone> SetJointTransform<ReduceT, F> {
     }
 }
 
-#[macro_export]
-macro_rules! new_generic_set_joint_transform {
-    ( $f:expr ) => {
-        SetJointTransform::new_generic($f, false)
-    };
+pub fn new_set_joint_transform_generic<K, ReduceT: Clone, F: Fn(&K, &K) -> SetJointTransformResult<ReduceT> + Clone>(f: F) -> SetJointTransform<ReduceT, F> {
+    SetJointTransform::Generic(f, false)
 }
 
-#[macro_export]
-macro_rules! new_unchangedlr_set_joint_transform {
-    ( $r:expr ) => {
-        SetJointTransform::new_unchanged($r, |_,_| SetJointTransformResult::UnchangedLR($r))
-    };
+pub fn new_set_joint_transform_unchangedlr<K, ReduceT: Clone>(r: ReduceT) -> SetJointTransform<ReduceT, fn(&K, &K) -> SetJointTransformResult<ReduceT>> {
+    SetJointTransform::UnchangedLR(r)
 }
 
-#[macro_export]
-macro_rules! new_unchangedl_set_joint_transform {
-    ( $r:expr ) => {
-        SetJointTransform::new_unchanged($r, |_,_| SetJointTransformResult::UnchangedL($r))
-    };
+pub fn new_set_joint_transform_unchangedl<K, ReduceT: Clone>(r: ReduceT) -> SetJointTransform<ReduceT, fn(&K, &K) -> SetJointTransformResult<ReduceT>> {
+    SetJointTransform::UnchangedL(r)
 }
 
-#[macro_export]
-macro_rules! new_unchangedr_set_joint_transform {
-    ( $r:expr ) => {
-        SetJointTransform::new_unchanged($r, |_,_| SetJointTransformResult::UnchangedR($r))
-    };
+pub fn new_set_joint_transform_unchangedr<K, ReduceT: Clone>(r: ReduceT) -> SetJointTransform<ReduceT, fn(&K, &K) -> SetJointTransformResult<ReduceT>> {
+    SetJointTransform::UnchangedR(r)
 }
 
-#[macro_export]
-macro_rules! new_removed_set_joint_transform {
-    ( $r:expr ) => {
-        SetJointTransform::new_removed($r, |_,_| SetJointTransformResult::Removed($r))
-    };
+pub fn new_set_joint_transform_removed<K, ReduceT: Clone>(r: ReduceT) -> SetJointTransform<ReduceT, fn(&K, &K) -> SetJointTransformResult<ReduceT>> {
+    SetJointTransform::Removed(r)
 }
 
 #[derive(Clone)]
@@ -208,21 +128,6 @@ pub enum MapTransform<ReduceT, F> {
 }
 
 impl <ReduceT: Clone, F> MapTransform<ReduceT, F> {
-    pub fn new_generic<K, V>(f: F) -> MapTransform<ReduceT, F> where F: Fn(&K, &V) -> MapTransformResult<V, ReduceT>
-    {
-        MapTransform::Generic(f)
-    }
-
-    pub fn new_unchanged<K, V>(r: ReduceT, _f: F) -> MapTransform<ReduceT, F> where F: Fn(&K, &V) -> MapTransformResult<V, ReduceT>
-    {
-        MapTransform::<ReduceT, F>::Unchanged(r)
-    }
-
-    pub fn new_removed<K, V>(r: ReduceT, _f: F) -> MapTransform<ReduceT, F> where F: Fn(&K, &V) -> MapTransformResult<V, ReduceT>
-    {
-        MapTransform::<ReduceT, F>::Removed(r)
-    }
-
     pub fn call<K, V>(&self, k: &K, v: &V) -> MapTransformResult<V, ReduceT> where F: Fn(&K, &V) -> MapTransformResult<V, ReduceT>
     {
         match self {
@@ -231,27 +136,86 @@ impl <ReduceT: Clone, F> MapTransform<ReduceT, F> {
             Self::Removed(r) => MapTransformResult::Removed(r.clone()),
         }
     }
+
+    pub fn call_transform_transmute<K, V, L, W>(&self, k: &K, v: &V, l: &L, w: &W) -> MapTransformResult<V, ReduceT> where F: Fn(&K, &V, &L, &W) -> MapTransformResult<V, ReduceT>
+    {
+        match self {
+            Self::Generic(f) => f(k, v, l, w),
+            Self::Unchanged(r) => MapTransformResult::Unchanged(r.clone()),
+            Self::Removed(r) => MapTransformResult::Removed(r.clone()),
+        }
+    }
+
+    pub fn call_transmute_transform<K, V, L, W>(&self, k: &K, v: &V, l: &L, w: &W) -> MapTransformResult<W, ReduceT> where F: Fn(&K, &V, &L, &W) -> MapTransformResult<W, ReduceT>
+    {
+        match self {
+            Self::Generic(f) => f(k, v, l, w),
+            Self::Unchanged(r) => MapTransformResult::Unchanged(r.clone()),
+            Self::Removed(r) => MapTransformResult::Removed(r.clone()),
+        }
+    }
+
+    pub fn flip_transform_transmute<K, V, L, W>(&self) -> MapTransform<ReduceT, impl Fn(&L, &W, &K, &V) -> MapTransformResult<V, ReduceT> + Clone>
+    where F: Fn(&K, &V, &L, &W) -> MapTransformResult<V, ReduceT> + Clone
+    {
+        match self {
+            Self::Generic(f) => {
+                let g = f.clone();
+                MapTransform::Generic(move |l: &_, w: &_, k: &_, v: &_| g(k, v, l, w))
+            },
+            Self::Unchanged(r) => MapTransform::Unchanged(r.clone()),
+            Self::Removed(r) => MapTransform::Removed(r.clone()),
+        }
+    }
+
+    pub fn flip_transmute_transform<K, V, L, W>(&self) -> MapTransform<ReduceT, impl Fn(&L, &W, &K, &V) -> MapTransformResult<W, ReduceT> + Clone>
+    where F: Fn(&K, &V, &L, &W) -> MapTransformResult<W, ReduceT> + Clone
+    {
+        match self {
+            Self::Generic(f) => {
+                let g = f.clone();
+                MapTransform::Generic(move |l: &_, w: &_, k: &_, v: &_| g(k, v, l, w))
+            },
+            Self::Unchanged(r) => MapTransform::Unchanged(r.clone()),
+            Self::Removed(r) => MapTransform::Removed(r.clone()),
+        }
+    }
 }
 
-#[macro_export]
-macro_rules! new_generic_map_transform {
-    ( $f:expr ) => {
-        MapTransform::new_generic($f)
-    };
+pub fn new_map_transform_generic<K, V, ReduceT: Clone, F: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone>(f: F) -> MapTransform<ReduceT, F> {
+    MapTransform::Generic(f)
 }
 
-#[macro_export]
-macro_rules! new_unchanged_map_transform {
-    ( $r:expr ) => {
-        MapTransform::new_unchanged($r, |_,_| MapTransformResult::Unchanged($r))
-    };
+pub fn new_map_transform_unchanged<K, V, ReduceT: Clone>(r: ReduceT) -> MapTransform<ReduceT, fn(&K, &V) -> MapTransformResult<V, ReduceT>> {
+    MapTransform::Unchanged(r)
 }
 
-#[macro_export]
-macro_rules! new_removed_map_transform {
-    ( $r:expr ) => {
-        MapTransform::new_removed($r, |_,_| MapTransformResult::Removed($r))
-    };
+pub fn new_map_transform_removed<K, V, ReduceT: Clone>(r: ReduceT) -> MapTransform<ReduceT, fn(&K, &V) -> MapTransformResult<V, ReduceT>> {
+    MapTransform::Removed(r)
+}
+
+pub fn new_map_transform_transmute_generic<K, V, L, W, ReduceT: Clone, F: Fn(&K, &V, &L, &W) -> MapTransformResult<V, ReduceT> + Clone>(f: F) -> MapTransform<ReduceT, F> {
+    MapTransform::Generic(f)
+}
+
+pub fn new_map_transform_transmute_unchanged<K, V, L, W, ReduceT: Clone>(r: ReduceT) -> MapTransform<ReduceT, fn(&K, &V, &L, &W) -> MapTransformResult<V, ReduceT>> {
+    MapTransform::Unchanged(r)
+}
+
+pub fn new_map_transform_transmute_removed<K, V, L, W, ReduceT: Clone>(r: ReduceT) -> MapTransform<ReduceT, fn(&K, &V, &L, &W) -> MapTransformResult<V, ReduceT>> {
+    MapTransform::Removed(r)
+}
+
+pub fn new_map_transmute_transform_generic<K, V, L, W, ReduceT: Clone, F: Fn(&K, &V, &L, &W) -> MapTransformResult<W, ReduceT> + Clone>(f: F) -> MapTransform<ReduceT, F> {
+    MapTransform::Generic(f)
+}
+
+pub fn new_map_transmute_transform_unchanged<K, V, L, W, ReduceT: Clone>(r: ReduceT) -> MapTransform<ReduceT, fn(&K, &V, &L, &W) -> MapTransformResult<W, ReduceT>> {
+    MapTransform::Unchanged(r)
+}
+
+pub fn new_map_transmute_transform_removed<K, V, L, W, ReduceT: Clone>(r: ReduceT) -> MapTransform<ReduceT, fn(&K, &V, &L, &W) -> MapTransformResult<W, ReduceT>> {
+    MapTransform::Removed(r)
 }
 
 #[derive(Clone)]
@@ -262,21 +226,6 @@ pub enum SetTransform<ReduceT, F> {
 }
 
 impl <ReduceT: Clone, F> SetTransform<ReduceT, F> {
-    pub fn new_generic<K>(f: F) -> SetTransform<ReduceT, F> where F: Fn(&K) -> SetTransformResult<ReduceT>
-    {
-        SetTransform::Generic(f)
-    }
-
-    pub fn new_unchanged<K>(r: ReduceT, _f: F) -> SetTransform<ReduceT, F> where F: Fn(&K) -> SetTransformResult<ReduceT>
-    {
-        SetTransform::<ReduceT, F>::Unchanged(r)
-    }
-
-    pub fn new_removed<K>(r: ReduceT, _f: F) -> SetTransform<ReduceT, F> where F: Fn(&K) -> SetTransformResult<ReduceT>
-    {
-        SetTransform::<ReduceT, F>::Removed(r)
-    }
-
     pub fn call<K>(&self, k: &K) -> SetTransformResult<ReduceT> where F: Fn(&K) -> SetTransformResult<ReduceT>
     {
         match self {
@@ -285,27 +234,52 @@ impl <ReduceT: Clone, F> SetTransform<ReduceT, F> {
             Self::Removed(r) => SetTransformResult::Removed(r.clone()),
         }
     }
+
+    pub fn call_transmute<K, L>(&self, k: &K, l: &L) -> SetTransformResult<ReduceT> where F: Fn(&K, &L) -> SetTransformResult<ReduceT>
+    {
+        match self {
+            Self::Generic(f) => f(k, l),
+            Self::Unchanged(r) => SetTransformResult::Unchanged(r.clone()),
+            Self::Removed(r) => SetTransformResult::Removed(r.clone()),
+        }
+    }
+
+    pub fn flip_transmute<K, L>(&self) -> SetTransform<ReduceT, impl Fn(&L, &K) -> SetTransformResult<ReduceT> + Clone>
+    where F: Fn(&K, &L) -> SetTransformResult<ReduceT> + Clone
+    {
+        match self {
+            Self::Generic(f) => {
+                let g = f.clone();
+                SetTransform::Generic(move |l: &_, k: &_| g(k, l))
+            },
+            Self::Unchanged(r) => SetTransform::Unchanged(r.clone()),
+            Self::Removed(r) => SetTransform::Removed(r.clone()),
+        }
+    }
 }
 
-#[macro_export]
-macro_rules! new_generic_set_transform {
-    ( $f:expr ) => {
-        SetTransform::new_generic($f)
-    };
+pub fn new_set_transform_generic<K, ReduceT: Clone, F: Fn(&K) -> SetTransformResult<ReduceT> + Clone>(f: F) -> SetTransform<ReduceT, F> {
+    SetTransform::Generic(f)
 }
 
-#[macro_export]
-macro_rules! new_unchanged_set_transform {
-    ( $r:expr ) => {
-        SetTransform::new_unchanged($r, |_| SetTransformResult::Unchanged($r))
-    };
+pub fn new_set_transform_unchanged<K, ReduceT: Clone>(r: ReduceT) -> SetTransform<ReduceT, fn(&K) -> SetTransformResult<ReduceT>> {
+    SetTransform::Unchanged(r)
 }
 
-#[macro_export]
-macro_rules! new_removed_set_transform {
-    ( $r:expr ) => {
-        SetTransform::new_removed($r, |_| SetTransformResult::Removed($r))
-    };
+pub fn new_set_transform_removed<K, ReduceT: Clone>(r: ReduceT) -> SetTransform<ReduceT, fn(&K) -> SetTransformResult<ReduceT>> {
+    SetTransform::Removed(r)
+}
+
+pub fn new_set_transform_transmute_generic<K, L, ReduceT: Clone, F: Fn(&K, &L) -> SetTransformResult<ReduceT> + Clone>(f: F) -> SetTransform<ReduceT, F> {
+    SetTransform::Generic(f)
+}
+
+pub fn new_set_transform_transmute_unchanged<K, L, ReduceT: Clone>(r: ReduceT) -> SetTransform<ReduceT, fn(&K, &L) -> SetTransformResult<ReduceT>> {
+    SetTransform::Unchanged(r)
+}
+
+pub fn new_set_transform_transmute_removed<K, L, ReduceT: Clone>(r: ReduceT) -> SetTransform<ReduceT, fn(&K, &L) -> SetTransformResult<ReduceT>> {
+    SetTransform::Removed(r)
 }
 
 #[derive(Clone)]
@@ -315,16 +289,6 @@ pub enum MapTransmute<ReduceT, F> {
 }
 
 impl <ReduceT: Clone, F> MapTransmute<ReduceT, F> {
-    pub fn new_generic<K, V, S, X>(f: F) -> MapTransmute<ReduceT, F> where F: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT>
-    {
-        MapTransmute::Generic(f)
-    }
-
-    pub fn new_removed<K, V, S, X>(r: ReduceT, _f: F) -> MapTransmute<ReduceT, F> where F: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT>
-    {
-        MapTransmute::<ReduceT, F>::Removed(r)
-    }
-
     pub fn call<K, V, S, X>(&self, k: &K, v: &V) -> MapTransmuteResult<S, X, ReduceT> where F: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT>
     {
         match self {
@@ -332,20 +296,42 @@ impl <ReduceT: Clone, F> MapTransmute<ReduceT, F> {
             Self::Removed(r) => MapTransmuteResult::Removed(r.clone()),
         }
     }
+
+    pub fn call_transmute<K, V, L, W, S, X>(&self, k: &K, v: &V, l: &L, w: &W) -> MapTransmuteResult<S, X, ReduceT> where F: Fn(&K, &V, &L, &W) -> MapTransmuteResult<S, X, ReduceT>
+    {
+        match self {
+            Self::Generic(f) => f(k, v, l, w),
+            Self::Removed(r) => MapTransmuteResult::Removed(r.clone()),
+        }
+    }
+
+    pub fn flip<K, V, L, W, S, X>(&self) -> MapTransmute<ReduceT, impl Fn(&L, &W, &K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone>
+    where F: Fn(&K, &V, &L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone
+    {
+        match self {
+            Self::Generic(f) => {
+                let g = f.clone();
+                MapTransmute::Generic(move |l: &_, w: &_, k: &_, v: &_| g(k, v, l, w))
+            },
+            Self::Removed(r) => MapTransmute::Removed(r.clone()),
+        }
+    }
 }
 
-#[macro_export]
-macro_rules! new_generic_map_transmute {
-    ( $f:expr ) => {
-        MapTransmute::new_generic($f)
-    };
+pub fn new_map_transmute_generic<K, V, S, X, ReduceT: Clone, F: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone>(f: F) -> MapTransmute<ReduceT, F> {
+    MapTransmute::Generic(f)
 }
 
-#[macro_export]
-macro_rules! new_removed_map_transmute {
-    ( $r:expr ) => {
-        MapTransmute::new_removed($r, |_,_| MapTransmuteResult::Removed($r))
-    };
+pub fn new_map_transmute_removed<K, V, S, X, ReduceT: Clone>(r: ReduceT) -> MapTransmute<ReduceT, fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT>> {
+    MapTransmute::Removed(r)
+}
+
+pub fn new_map_transmute_transmute_generic<K, V, L, W, S, X, ReduceT: Clone, F: Fn(&K, &V, &L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone>(f: F) -> MapTransmute<ReduceT, F> {
+    MapTransmute::Generic(f)
+}
+
+pub fn new_map_transmute_transmute_removed<K, V, L, W, S, X, ReduceT: Clone>(r: ReduceT) -> MapTransmute<ReduceT, fn(&K, &V, &L, &W) -> MapTransmuteResult<S, X, ReduceT>> {
+    MapTransmute::Removed(r)
 }
 
 #[derive(Clone)]
@@ -355,16 +341,6 @@ pub enum SetTransmute<ReduceT, F> {
 }
 
 impl <ReduceT: Clone, F> SetTransmute<ReduceT, F> {
-    pub fn new_generic<K, S>(f: F) -> SetTransmute<ReduceT, F> where F: Fn(&K) -> SetTransmuteResult<S, ReduceT>
-    {
-        SetTransmute::Generic(f)
-    }
-
-    pub fn new_removed<K, S>(r: ReduceT, _f: F) -> SetTransmute<ReduceT, F> where F: Fn(&K) -> SetTransmuteResult<S, ReduceT>
-    {
-        SetTransmute::<ReduceT, F>::Removed(r)
-    }
-
     pub fn call<K, S>(&self, k: &K) -> SetTransmuteResult<S, ReduceT> where F: Fn(&K) -> SetTransmuteResult<S, ReduceT>
     {
         match self {
@@ -372,18 +348,40 @@ impl <ReduceT: Clone, F> SetTransmute<ReduceT, F> {
             Self::Removed(r) => SetTransmuteResult::Removed(r.clone()),
         }
     }
+
+    pub fn call_transmute<K, L, S>(&self, k: &K, l: &L) -> SetTransmuteResult<S, ReduceT> where F: Fn(&K, &L) -> SetTransmuteResult<S, ReduceT>
+    {
+        match self {
+            Self::Generic(f) => f(k, l),
+            Self::Removed(r) => SetTransmuteResult::Removed(r.clone()),
+        }
+    }
+
+    pub fn flip<K, L, S>(&self) -> SetTransmute<ReduceT, impl Fn(&L, &K) -> SetTransmuteResult<S, ReduceT> + Clone>
+    where F: Fn(&K, &L) -> SetTransmuteResult<S, ReduceT> + Clone
+    {
+        match self {
+            Self::Generic(f) => {
+                let g = f.clone();
+                SetTransmute::Generic(move |l: &_, k: &_| g(k, l))
+            },
+            Self::Removed(r) => SetTransmute::Removed(r.clone()),
+        }
+    }
 }
 
-#[macro_export]
-macro_rules! new_generic_set_transmute {
-    ( $f:expr ) => {
-        SetTransmute::new_generic($f)
-    };
+pub fn new_set_transmute_generic<K, S, ReduceT: Clone, F: Fn(&K) -> SetTransmuteResult<S, ReduceT> + Clone>(f: F) -> SetTransmute<ReduceT, F> {
+    SetTransmute::Generic(f)
 }
 
-#[macro_export]
-macro_rules! new_removed_set_transmute {
-    ( $r:expr ) => {
-        SetTransmute::new_removed($r, |_| SetTransmuteResult::Removed($r))
-    };
+pub fn new_set_transmute_removed<K, S, ReduceT: Clone>(r: ReduceT) -> SetTransmute<ReduceT, fn(&K) -> SetTransmuteResult<S, ReduceT>> {
+    SetTransmute::Removed(r)
+}
+
+pub fn new_set_transmute_transmute_generic<K, L, S, ReduceT: Clone, F: Fn(&K, &L) -> SetTransmuteResult<S, ReduceT> + Clone>(f: F) -> SetTransmute<ReduceT, F> {
+    SetTransmute::Generic(f)
+}
+
+pub fn new_set_transmute_transmute_removed<K, L, S, ReduceT: Clone>(r: ReduceT) -> SetTransmute<ReduceT, fn(&K, &L) -> SetTransmuteResult<S, ReduceT>> {
+    SetTransmute::Removed(r)
 }

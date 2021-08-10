@@ -1,4 +1,4 @@
-use crate::{traits::*, hash_trie::HashTrie, *};
+use crate::{functions::*, traits::*, hash_trie::HashTrie, *};
 use alloc::fmt::Debug;
 
 /// `HashTrieSet` implements a hash set using a hash array mapped trie (HAMT).
@@ -118,7 +118,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         Op: Fn(&K) -> SetTransformResult<ReduceT> + Clone,
     {
         let (set, reduced) = self.set.transform(reduce_op, match op {
-            SetTransform::Generic(f) => MapTransform::new_generic(move |key, _value| match f(key) {
+            SetTransform::Generic(f) => new_map_transform_generic(move |key, _value| match f(key) {
                 SetTransformResult::Unchanged(reduced) => MapTransformResult::Unchanged(reduced),
                 SetTransformResult::Removed(reduced) => MapTransformResult::Removed(reduced),
             }),
@@ -141,7 +141,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         M: HasherBv<H, S>,
     {
         let (set, reduced) = self.set.transmute(reduce_op, match op {
-            SetTransmute::Generic(f) => MapTransmute::new_generic(move |key, _value| match f(key) {
+            SetTransmute::Generic(f) => new_map_transmute_generic(move |key, _value| match f(key) {
                 SetTransmuteResult::Transmuted(key, reduced) => MapTransmuteResult::Transmuted(key, (), reduced),
                 SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
             }),
@@ -163,19 +163,19 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
     {
         let (set, reduced) = self.set.transform_with_transformed(&right.set, reduce_op,
             match both_op {
-                SetJointTransform::Generic(g, flipped) => MapJointTransform::new_generic(move |k,_,l,_| g(k, l).into(), flipped),
+                SetJointTransform::Generic(g, flipped) => MapJointTransform::Generic(move |k:&_, _: &_, l:&_, _: &_| g(k, l).into(), flipped),
                 SetJointTransform::UnchangedLR(r) => MapJointTransform::UnchangedLR(r.clone()),
                 SetJointTransform::UnchangedL(r) => MapJointTransform::UnchangedL(r.clone()),
                 SetJointTransform::UnchangedR(r) => MapJointTransform::UnchangedR(r.clone()),
                 SetJointTransform::Removed(r) => MapJointTransform::Removed(r.clone()),
             },
             match left_op {
-                SetTransform::Generic(f) => MapTransform::new_generic(move |l,_| f(l).into()),
+                SetTransform::Generic(f) => MapTransform::Generic(move |l: &_, _: &_| f(l).into()),
                 SetTransform::Unchanged(r) => MapTransform::Unchanged(r),
                 SetTransform::Removed(r) => MapTransform::Removed(r),
             },
             match right_op {
-                SetTransform::Generic(f) => MapTransform::new_generic(move |r,_| f(r).into()),
+                SetTransform::Generic(f) => MapTransform::Generic(move |r: &_, _: &_| f(r).into()),
                 SetTransform::Unchanged(r) => MapTransform::Unchanged(r),
                 SetTransform::Removed(r) => MapTransform::Removed(r),
             });
@@ -184,7 +184,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
 
     /// Run a transform/transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed set.
     pub unsafe fn transform_with_transmuted<L: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: SetTransform<ReduceT, LeftOp>, right_op: SetTransmute<ReduceT, RightOp>) -> (Self, ReduceT)
+        (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: SetTransform<ReduceT, BothOp>, left_op: SetTransform<ReduceT, LeftOp>, right_op: SetTransmute<ReduceT, RightOp>) -> (Self, ReduceT)
         where
         Self: Sized,
         ReduceT: Clone + Default,
@@ -199,14 +199,14 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         M: HasherBv<H, L>,
     {
         let (set, reduced) = self.set.transform_with_transmuted(&right.set, reduce_op,
-            |l,_,r,_| both_op(l, r).into(),
+            new_map_transform_transmute_generic(|l: &_, _: &_, r: &_, _: &_| both_op.call_transmute(l, r).into()),
             match left_op {
-                SetTransform::Generic(f) => MapTransform::new_generic(move |l,_| f(l).into()),
+                SetTransform::Generic(f) => MapTransform::Generic(move |l: &_, _: &_| f(l).into()),
                 SetTransform::Unchanged(r) => MapTransform::Unchanged(r),
                 SetTransform::Removed(r) => MapTransform::Removed(r),
             },
             match right_op {
-                SetTransmute::Generic(f) => MapTransmute::new_generic(move |r,_| match f(r) {
+                SetTransmute::Generic(f) => MapTransmute::Generic(move |r: &_, _: &_| match f(r) {
                     SetTransmuteResult::Transmuted(k, r) => MapTransmuteResult::Transmuted(k, (), r),
                     SetTransmuteResult::Removed(r) => MapTransmuteResult::Removed(r),
                 }),
@@ -217,7 +217,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
 
     /// Run a transmute/transform operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed set.
     pub unsafe fn transmute_with_transformed<L: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: SetTransmute<ReduceT, LeftOp>, right_op: SetTransform<ReduceT, RightOp>) -> (HashTrieSet<H, F, L, M>, ReduceT)
+        (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: SetTransform<ReduceT, BothOp>, left_op: SetTransmute<ReduceT, LeftOp>, right_op: SetTransform<ReduceT, RightOp>) -> (HashTrieSet<H, F, L, M>, ReduceT)
         where
         Self: Sized,
         ReduceT: Clone + Default,
@@ -232,16 +232,16 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         M: HasherBv<H, L>,
     {
         let (set, reduced) = self.set.transmute_with_transformed(&right.set, reduce_op,
-            |l,_,r,_| both_op(l, r).into(),
+            new_map_transmute_transform_generic(|l: &_, _: &_, r: &_, _: &_| both_op.call_transmute(l, r).into()),
             match left_op {
-                SetTransmute::Generic(f) => MapTransmute::new_generic(move |l,_| match f(l) {
+                SetTransmute::Generic(f) => MapTransmute::Generic(move |l: &_, _: &_| match f(l) {
                     SetTransmuteResult::Transmuted(k, r) => MapTransmuteResult::Transmuted(k, (), r),
                     SetTransmuteResult::Removed(r) => MapTransmuteResult::Removed(r),
                 }),
                 SetTransmute::Removed(r) => MapTransmute::Removed(r),
             },
             match right_op {
-                SetTransform::Generic(f) => MapTransform::new_generic(move |r,_| f(r).into()),
+                SetTransform::Generic(f) => MapTransform::Generic(move |r: &_, _: &_| f(r).into()),
                 SetTransform::Unchanged(r) => MapTransform::Unchanged(r),
                 SetTransform::Removed(r) => MapTransform::Removed(r),
             });
@@ -250,7 +250,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
 
     /// Run a transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations.
     pub unsafe fn transmute_with_transmuted<L: Key + HashLike<K>, S: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: SetTransmute<ReduceT, LeftOp>, right_op: SetTransmute<ReduceT, RightOp>) -> (HashTrieSet<H, F, S, M>, ReduceT)
+        (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: SetTransmute<ReduceT, BothOp>, left_op: SetTransmute<ReduceT, LeftOp>, right_op: SetTransmute<ReduceT, RightOp>) -> (HashTrieSet<H, F, S, M>, ReduceT)
         where
         Self: Sized,
         ReduceT: Clone + Default,
@@ -270,19 +270,19 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         M: HasherBv<H, S>,
     {
         let (set, reduced) = self.set.transmute_with_transmuted(&right.set, reduce_op, 
-            |l,_,r,_| match both_op(l, r) {
+            new_map_transmute_transmute_generic(|l: &_, _: &_, r: &_, _: &_| match both_op.call_transmute(l, r) {
                 SetTransmuteResult::Transmuted(key, reduced) => MapTransmuteResult::Transmuted(key, (), reduced),
                 SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
-            },
+            }),
             match left_op {
-                SetTransmute::Generic(f) => MapTransmute::new_generic(move |l,_| match f(l) {
+                SetTransmute::Generic(f) => MapTransmute::Generic(move |l: &_, _: &_| match f(l) {
                     SetTransmuteResult::Transmuted(k, r) => MapTransmuteResult::Transmuted(k, (), r),
                     SetTransmuteResult::Removed(r) => MapTransmuteResult::Removed(r),
                 }),
                 SetTransmute::Removed(r) => MapTransmute::Removed(r),
             },
             match right_op {
-                SetTransmute::Generic(f) => MapTransmute::new_generic(move |r,_| match f(r) {
+                SetTransmute::Generic(f) => MapTransmute::Generic(move |r: &_, _: &_| match f(r) {
                     SetTransmuteResult::Transmuted(k, r) => MapTransmuteResult::Transmuted(k, (), r),
                     SetTransmuteResult::Removed(r) => MapTransmuteResult::Removed(r),
                 }),
@@ -309,7 +309,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> PartialEq for Hash
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
+    use crate::{*, functions::*};
     use rand::Rng;
     
     #[test]
@@ -320,8 +320,8 @@ mod tests {
             set = set.insert(i, false).unwrap().0;
         }
 
-        let removed = set.transform(|_,_| (), new_removed_set_transform!(()));
-        let summed = set.transform(|&l,&r| l + r, new_generic_set_transform!(|&k| SetTransformResult::Removed(k)));
+        let removed = set.transform(|_,_| (), new_set_transform_removed(()));
+        let summed = set.transform(|&l,&r| l + r, new_set_transform_generic(|&k| SetTransformResult::Removed(k)));
 
         assert_eq!(removed.0.size(), 0);
         assert_eq!(summed.1, 5050);
@@ -335,8 +335,8 @@ mod tests {
             set = set.insert(i, false).unwrap().0;
         }
 
-        let removed = unsafe { set.transmute(|_,_| (), new_removed_set_transmute!(())) };
-        let summed = unsafe { set.transmute(|&l,&r| l + r, new_generic_set_transmute!(|&k| SetTransmuteResult::Removed(k))) };
+        let removed = unsafe { set.transmute(|_,_| (), new_set_transmute_removed(())) };
+        let summed = unsafe { set.transmute(|&l,&r| l + r, new_set_transmute_generic(|&k| SetTransmuteResult::Removed(k))) };
 
         assert_eq!(removed.0.size(), 0);
         assert_eq!(summed.1, 5050);
@@ -360,39 +360,39 @@ mod tests {
         let ff = seta.transform_with_transformed(
             &setb, 
             |l,r| -> i32 {l.wrapping_add(*r)},
-            new_generic_set_joint_transform!(|l: &i32, r: &i32| SetJointTransformResult::Removed(l.wrapping_mul(*r))),
-            new_generic_set_transform!(|l| SetTransformResult::Unchanged(*l)),
-            new_generic_set_transform!(|r| SetTransformResult::Unchanged(*r)));
+            new_set_joint_transform_generic(|l: &i32, r: &i32| SetJointTransformResult::Removed(l.wrapping_mul(*r))),
+            new_set_transform_generic(|l| SetTransformResult::Unchanged(*l)),
+            new_set_transform_generic(|r| SetTransformResult::Unchanged(*r)));
         let fm = unsafe { seta.transform_with_transmuted(
             &setb, 
             |l,r| -> i32 {l.wrapping_add(*r)},
-            |l,r| SetTransformResult::Removed(l.wrapping_mul(*r)), 
-            new_generic_set_transform!(|l| SetTransformResult::Unchanged(*l)),
-            new_generic_set_transmute!(|r| SetTransmuteResult::Transmuted(*r, *r)))
+            new_set_transform_transmute_generic(|l: &i32, r| SetTransformResult::Removed(l.wrapping_mul(*r))),
+            new_set_transform_generic(|l| SetTransformResult::Unchanged(*l)),
+            new_set_transmute_generic(|r| SetTransmuteResult::Transmuted(*r, *r)))
         };
         let mf = unsafe { seta.transmute_with_transformed(
             &setb, 
             |l,r| -> i32 {l.wrapping_add(*r)},
-            |l,r| SetTransformResult::Removed(l.wrapping_mul(*r)),
-            new_generic_set_transmute!(|l| SetTransmuteResult::Transmuted(*l, *l)),
-            new_generic_set_transform!(|r| SetTransformResult::Unchanged(*r)))
+            new_set_transform_transmute_generic(|l: &i32, r| SetTransformResult::Removed(l.wrapping_mul(*r))),
+            new_set_transmute_generic(|l| SetTransmuteResult::Transmuted(*l, *l)),
+            new_set_transform_generic(|r| SetTransformResult::Unchanged(*r)))
         };
         let mm = unsafe { seta.transmute_with_transmuted(
             &setb, 
             |l,r| -> i32 {l.wrapping_add(*r)},
-            |l,r| SetTransmuteResult::Removed(l.wrapping_mul(*r)),
-            new_generic_set_transmute!(|l| SetTransmuteResult::Transmuted(*l, *l)),
-            new_generic_set_transmute!(|r| SetTransmuteResult::Transmuted(*r, *r)))
+            new_set_transmute_transmute_generic(|l: &i32, r| SetTransmuteResult::Removed(l.wrapping_mul(*r))),
+            new_set_transmute_generic(|l| SetTransmuteResult::Transmuted(*l, *l)),
+            new_set_transmute_generic(|r| SetTransmuteResult::Transmuted(*r, *r)))
         };
 
         assert_eq!(ff.1, fm.1);
         assert_eq!(ff.1, mf.1);
         assert_eq!(ff.1, mm.1);
 
-        let ffx = ff.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_generic_set_transform!(|k| SetTransformResult::Removed(*k)));
-        let fmx = fm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_generic_set_transform!(|k| SetTransformResult::Removed(*k)));
-        let mfx = mf.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_generic_set_transform!(|k| SetTransformResult::Removed(*k)));
-        let mmx = mm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_generic_set_transform!(|k| SetTransformResult::Removed(*k)));
+        let ffx = ff.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)));
+        let fmx = fm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)));
+        let mfx = mf.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)));
+        let mmx = mm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)));
 
         assert_eq!(ffx.1, fmx.1);
         assert_eq!(ffx.1, mfx.1);

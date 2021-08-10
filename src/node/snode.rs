@@ -109,7 +109,7 @@ where
     }
 }
 
-pub(crate) unsafe fn transform_with_transmuted<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &MNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
+pub(crate) unsafe fn transform_with_transmuted<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &MNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
 where
     ReduceT: Clone + Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
@@ -124,13 +124,13 @@ where
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
 {
     match right {
-        MNode::C(cnode) => cnode::transmute_with_transformed_snode(cnode, this, reduce_op, |k,v,l,w| both_op(l, w, k, v), right_op, left_op, depth),
-        MNode::L(lnode) => lnode::transmute_with_transformed_snode(lnode, this, reduce_op, |k,v,l,w| both_op(l, w, k, v), right_op, left_op, depth),
+        MNode::C(cnode) => cnode::transmute_with_transformed_snode(cnode, this, reduce_op, both_op.flip_transform_transmute(), right_op, left_op, depth),
+        MNode::L(lnode) => lnode::transmute_with_transformed_snode(lnode, this, reduce_op, both_op.flip_transform_transmute(), right_op, left_op, depth),
         MNode::S(snode) => transform_with_transmuted_snode(this, snode, reduce_op, both_op, left_op, right_op, depth),
     }
 }
 
-pub(crate) unsafe fn transmute_with_transformed<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &MNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize) -> MNodeTransformResult<H, F, L, W, M, ReduceT>
+pub(crate) unsafe fn transmute_with_transformed<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &MNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize) -> MNodeTransformResult<H, F, L, W, M, ReduceT>
 where
     ReduceT: Clone + Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
@@ -145,8 +145,8 @@ where
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
 {
     match right {
-        MNode::C(cnode) => cnode::transform_with_transmuted_snode(cnode, this, reduce_op, |k,v,l,w| both_op(l, w, k, v), right_op, left_op, depth),
-        MNode::L(lnode) => lnode::transform_with_transmuted_snode(lnode, this, reduce_op, |k,v,l,w| both_op(l, w, k, v), right_op, left_op, depth),
+        MNode::C(cnode) => cnode::transform_with_transmuted_snode(cnode, this, reduce_op, both_op.flip_transmute_transform(), right_op, left_op, depth),
+        MNode::L(lnode) => lnode::transform_with_transmuted_snode(lnode, this, reduce_op, both_op.flip_transmute_transform(), right_op, left_op, depth),
         MNode::S(snode) => transmute_with_transformed_snode(this, snode, reduce_op, both_op, left_op, right_op, depth),
     }
 }
@@ -234,7 +234,7 @@ where
     }
 }
 
-pub(crate) unsafe fn transform_with_transmuted_snode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &Arc<SNode<L, W>>, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
+pub(crate) unsafe fn transform_with_transmuted_snode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &Arc<SNode<L, W>>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
 where
     ReduceT: Clone + Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
@@ -278,7 +278,7 @@ where
     }
 }
 
-pub(crate) unsafe fn transform_with_transmuted_snode_impl<K: Key, V: Value, L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right_key: &L, right_value: &W, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> LNodeTransformResult<K, V, ReduceT>
+pub(crate) unsafe fn transform_with_transmuted_snode_impl<K: Key, V: Value, L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right_key: &L, right_value: &W, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> LNodeTransformResult<K, V, ReduceT>
 where
     ReduceT: Clone + Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
@@ -291,7 +291,7 @@ where
     L: PartialEq<K>,
 {
     if *this.key() == *right_key {
-        match both_op(this.key(), this.value(), right_key, right_value) {
+        match both_op.call_transform_transmute(this.key(), this.value(), right_key, right_value) {
             MapTransformResult::Unchanged(reduced) => LNodeTransformResult::Unchanged(reduced),
             MapTransformResult::Transformed(value, reduced) => LNodeTransformResult::S(SNode::new(this.key().clone(), value), reduced),
             MapTransformResult::Removed(reduced) => LNodeTransformResult::Removed(reduced),
@@ -318,7 +318,7 @@ where
     }
 }
 
-pub(crate) unsafe fn transmute_with_transformed_snode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &Arc<SNode<L, W>>, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize) -> MNodeTransformResult<H, F, L, W, M, ReduceT>
+pub(crate) unsafe fn transmute_with_transformed_snode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &Arc<SNode<L, W>>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize) -> MNodeTransformResult<H, F, L, W, M, ReduceT>
 where
     ReduceT: Clone + Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
@@ -360,7 +360,7 @@ where
     }
 }
 
-pub(crate) unsafe fn transmute_with_transformed_snode_impl<K: Key, V: Value, L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &Arc<SNode<L, W>>, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>) -> LNodeTransformResult<L, W, ReduceT>
+pub(crate) unsafe fn transmute_with_transformed_snode_impl<K: Key, V: Value, L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &Arc<SNode<L, W>>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>) -> LNodeTransformResult<L, W, ReduceT>
 where
     ReduceT: Clone + Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
@@ -373,7 +373,7 @@ where
     L: PartialEq<K>,
 {
     if *this.key() == *right.key() {
-        match both_op(this.key(), this.value(), right.key(), right.value()) {
+        match both_op.call_transmute_transform(this.key(), this.value(), right.key(), right.value()) {
             MapTransformResult::Unchanged(reduced) => LNodeTransformResult::Unchanged(reduced),
             MapTransformResult::Transformed(value, reduced) => LNodeTransformResult::S(SNode::new(right.key().clone(), value), reduced),
             MapTransformResult::Removed(reduced) => LNodeTransformResult::Removed(reduced),
@@ -398,7 +398,7 @@ where
     }
 }
 
-pub(crate) unsafe fn transmute_with_transmuted<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, S: Key, W: Value, X: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &MNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize) -> MNodeTransmuteResult<H, F, S, X, M, ReduceT>
+pub(crate) unsafe fn transmute_with_transmuted<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, S: Key, W: Value, X: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &MNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransmute<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize) -> MNodeTransmuteResult<H, F, S, X, M, ReduceT>
 where
     ReduceT: Clone + Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
@@ -418,13 +418,13 @@ where
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
 {
     match right {
-        MNode::C(cnode) => cnode::transmute_with_transmuted_snode(cnode, this, reduce_op, |k,v,l,w| both_op(l, w, k, v), right_op, left_op, depth),
-        MNode::L(lnode) => lnode::transmute_with_transmuted_snode(lnode, this, reduce_op, |k,v,l,w| both_op(l, w, k, v), right_op, left_op, depth),
+        MNode::C(cnode) => cnode::transmute_with_transmuted_snode(cnode, this, reduce_op, both_op.flip(), right_op, left_op, depth),
+        MNode::L(lnode) => lnode::transmute_with_transmuted_snode(lnode, this, reduce_op, both_op.flip(), right_op, left_op, depth),
         MNode::S(snode) => transmute_with_transmuted_snode(this, snode, reduce_op, both_op, left_op, right_op, depth),
     }
 }
 
-pub(crate) unsafe fn transmute_with_transmuted_snode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, S: Key, X: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &Arc<SNode<L, W>>, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize) -> MNodeTransmuteResult<H, F, S, X, M, ReduceT>
+pub(crate) unsafe fn transmute_with_transmuted_snode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, S: Key, X: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &Arc<SNode<K, V>>, right: &Arc<SNode<L, W>>, reduce_op: ReduceOp, both_op: MapTransmute<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize) -> MNodeTransmuteResult<H, F, S, X, M, ReduceT>
 where
     ReduceT: Clone + Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
@@ -469,7 +469,7 @@ where
     }
 }
 
-pub(crate) unsafe fn transmute_with_transmuted_values<K: Key, V: Value, L: Key, W: Value, S: Key, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this_key: &K, this_value: &V, right_key: &L, right_value: &W, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> LNodeTransmuteResult<S, X, ReduceT>
+pub(crate) unsafe fn transmute_with_transmuted_values<K: Key, V: Value, L: Key, W: Value, S: Key, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this_key: &K, this_value: &V, right_key: &L, right_value: &W, reduce_op: ReduceOp, both_op: MapTransmute<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> LNodeTransmuteResult<S, X, ReduceT>
 where
     ReduceT: Clone + Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
@@ -486,7 +486,7 @@ where
     L: PartialEq<S>,
 {
     if this_key == right_key {
-        both_op(this_key, this_value, right_key, right_value).into()
+        both_op.call_transmute(this_key, this_value, right_key, right_value).into()
     }
     else {
         let lr = left_op.call(this_key, this_value);

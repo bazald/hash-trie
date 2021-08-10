@@ -119,7 +119,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     pub(crate) unsafe fn transform_with_transmuted<L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> (Self, ReduceT)
+        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> (Self, ReduceT)
         where
         Self: Sized,
         ReduceT: Clone + Default,
@@ -143,7 +143,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     pub(crate) unsafe fn transmute_with_transformed<L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>) -> (HashTrie<H, F, L, W, M>, ReduceT)
+        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>) -> (HashTrie<H, F, L, W, M>, ReduceT)
         where
         Self: Sized,
         ReduceT: Clone + Default,
@@ -167,7 +167,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     pub(crate) unsafe fn transmute_with_transmuted<L: Key, W: Value, S: Key, X: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: BothOp, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> (HashTrie<H, F, S, X, M>, ReduceT)
+        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransmute<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> (HashTrie<H, F, S, X, M>, ReduceT)
         where
         Self: Sized,
         ReduceT: Clone + Default,

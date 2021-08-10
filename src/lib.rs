@@ -8,8 +8,7 @@ extern crate alloc;
 mod result;
 mod bit_indexed_array;
 mod flag;
-#[macro_use]
-mod functions;
+pub mod functions;
 mod hash_trie;
 mod map;
 mod node;
