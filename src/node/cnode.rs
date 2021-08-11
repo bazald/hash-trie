@@ -120,6 +120,12 @@ where
     Op: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
 {
+    match op {
+        MapTransform::Generic(_) => {},
+        MapTransform::Unchanged(r) => return MNodeTransformResult::Unchanged(r),
+        MapTransform::Removed(r) => return MNodeTransformResult::Removed(r),
+    }
+
     let mut size = 0;
     let mut bits_t = F::default();
     let mut values_t = Vec::default();
@@ -191,6 +197,10 @@ where
     M: HasherBv<H, S>,
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
 {
+    if let MapTransmute::Removed(r) = op {
+        return MNodeTransmuteResult::Removed(r);
+    }
+
     let mut size = 0;
     let mut bits_t = F::default();
     let mut values_t = Vec::default();

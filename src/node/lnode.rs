@@ -154,6 +154,19 @@ where
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
     Op: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
 {
+    match op {
+        MapTransform::Generic(_) => transform_impl(this, reduce_op, op),
+        MapTransform::Unchanged(r) => LNodeTransformResult::Unchanged(r),
+        MapTransform::Removed(r) => LNodeTransformResult::Removed(r),
+    }
+}
+
+fn transform_impl<K: Key, V: Value, ReduceT, ReduceOp, Op>(this: &Arc<LNode<K, V>>, reduce_op: ReduceOp, op: MapTransform<ReduceT, Op>) -> LNodeTransformResult<K, V, ReduceT>
+where
+    ReduceT: Clone + Default,
+    ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+    Op: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
+{
     let next = match &this.next {
         LNodeNext::L(lnode) => transform(lnode, reduce_op.clone(), op.clone()),
         LNodeNext::S(snode) => snode::transform(snode, op.clone()).into(),
@@ -163,6 +176,20 @@ where
 }
 
 pub(super) unsafe fn transmute<K: Key, V: Value, S: Key, X: Value, ReduceT, ReduceOp, Op>(this: &Arc<LNode<K, V>>, reduce_op: ReduceOp, op: MapTransmute<ReduceT, Op>) -> LNodeTransmuteResult<S, X, ReduceT>
+where
+    ReduceT: Clone + Default,
+    ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+    Op: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,
+    K: HashLike<S>,
+    K: PartialEq<S>,
+{
+    match op {
+        MapTransmute::Generic(_) => transmute_impl(this, reduce_op, op),
+        MapTransmute::Removed(r) => LNodeTransmuteResult::Removed(r),
+    }
+}
+
+unsafe fn transmute_impl<K: Key, V: Value, S: Key, X: Value, ReduceT, ReduceOp, Op>(this: &Arc<LNode<K, V>>, reduce_op: ReduceOp, op: MapTransmute<ReduceT, Op>) -> LNodeTransmuteResult<S, X, ReduceT>
 where
     ReduceT: Clone + Default,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
