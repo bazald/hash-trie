@@ -449,7 +449,7 @@ where
         match values_t.len() {
             0 => MNodeJointTransformResult::Removed(reduced),
             1 => match values_t.pop().unwrap() {
-                MNode::C(_cnode) => MNodeJointTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+                MNode::C(cnode) => MNodeJointTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
                 MNode::L(lnode) => MNodeJointTransformResult::L(lnode, reduced),
                 MNode::S(snode) => MNodeJointTransformResult::S(snode, reduced),
             },
@@ -539,7 +539,7 @@ where
         match values_t.len() {
             0 => MNodeTransformResult::Removed(reduced),
             1 => match values_t.pop().unwrap() {
-                MNode::C(_cnode) => MNodeTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+                MNode::C(cnode) => MNodeTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
                 MNode::L(lnode) => MNodeTransformResult::L(lnode, reduced),
                 MNode::S(snode) => MNodeTransformResult::S(snode, reduced),
             },
@@ -630,7 +630,7 @@ where
         match values_t.len() {
             0 => MNodeTransformResult::Removed(reduced),
             1 => match values_t.pop().unwrap() {
-                MNode::C(_cnode) => MNodeTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+                MNode::C(cnode) => MNodeTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
                 MNode::L(lnode) => MNodeTransformResult::L(lnode, reduced),
                 MNode::S(snode) => MNodeTransformResult::S(snode, reduced),
             },
@@ -707,7 +707,7 @@ where
     match values_t.len() {
         0 => MNodeTransmuteResult::Removed(reduced),
         1 => match values_t.pop().unwrap() {
-            MNode::C(_cnode) => MNodeTransmuteResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+            MNode::C(cnode) => MNodeTransmuteResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
             MNode::L(lnode) => MNodeTransmuteResult::L(lnode, reduced),
             MNode::S(snode) => MNodeTransmuteResult::S(snode, reduced),
         },
@@ -831,7 +831,7 @@ where
         match values_t.len() {
             0 => MNodeJointTransformResult::Removed(reduced),
             1 => match values_t.pop().unwrap() {
-                MNode::C(_cnode) => MNodeJointTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+                MNode::C(cnode) => MNodeJointTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
                 MNode::L(lnode) => MNodeJointTransformResult::L(lnode, reduced),
                 MNode::S(snode) => MNodeJointTransformResult::S(snode, reduced),
             },
@@ -924,7 +924,7 @@ where
         match values_t.len() {
             0 => MNodeTransformResult::Removed(reduced),
             1 => match values_t.pop().unwrap() {
-                MNode::C(_cnode) => MNodeTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+                MNode::C(cnode) => MNodeTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
                 MNode::L(lnode) => MNodeTransformResult::L(lnode, reduced),
                 MNode::S(snode) => MNodeTransformResult::S(snode, reduced),
             },
@@ -1014,7 +1014,7 @@ where
         match values_t.len() {
             0 => MNodeTransformResult::Removed(reduced),
             1 => match values_t.pop().unwrap() {
-                MNode::C(_cnode) => MNodeTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+                MNode::C(cnode) => MNodeTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
                 MNode::L(lnode) => MNodeTransformResult::L(lnode, reduced),
                 MNode::S(snode) => MNodeTransformResult::S(snode, reduced),
             },
@@ -1093,7 +1093,7 @@ where
     match values_t.len() {
         0 => MNodeTransmuteResult::Removed(reduced),
         1 => match values_t.pop().unwrap() {
-            MNode::C(_cnode) => MNodeTransmuteResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+            MNode::C(cnode) => MNodeTransmuteResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
             MNode::L(lnode) => MNodeTransmuteResult::L(lnode, reduced),
             MNode::S(snode) => MNodeTransmuteResult::S(snode, reduced),
         },
@@ -1216,7 +1216,7 @@ where
         match values_t.len() {
             0 => MNodeJointTransformResult::Removed(reduced),
             1 => match values_t.pop().unwrap() {
-                MNode::C(_cnode) => MNodeJointTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+                MNode::C(cnode) => MNodeJointTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
                 MNode::L(lnode) => MNodeJointTransformResult::L(lnode, reduced),
                 MNode::S(snode) => MNodeJointTransformResult::S(snode, reduced),
             },
@@ -1308,7 +1308,7 @@ where
         match values_t.len() {
             0 => MNodeTransformResult::Removed(reduced),
             1 => match values_t.pop().unwrap() {
-                MNode::C(_cnode) => MNodeTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+                MNode::C(cnode) => MNodeTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
                 MNode::L(lnode) => MNodeTransformResult::L(lnode, reduced),
                 MNode::S(snode) => MNodeTransformResult::S(snode, reduced),
             },
@@ -1397,7 +1397,7 @@ where
         match values_t.len() {
             0 => MNodeTransformResult::Removed(reduced),
             1 => match values_t.pop().unwrap() {
-                MNode::C(_cnode) => MNodeTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+                MNode::C(cnode) => MNodeTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
                 MNode::L(lnode) => MNodeTransformResult::L(lnode, reduced),
                 MNode::S(snode) => MNodeTransformResult::S(snode, reduced),
             },
@@ -1476,7 +1476,7 @@ where
     match values_t.len() {
         0 => MNodeTransmuteResult::Removed(reduced),
         1 => match values_t.pop().unwrap() {
-            MNode::C(_cnode) => MNodeTransmuteResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
+            MNode::C(cnode) => MNodeTransmuteResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
             MNode::L(lnode) => MNodeTransmuteResult::L(lnode, reduced),
             MNode::S(snode) => MNodeTransmuteResult::S(snode, reduced),
         },

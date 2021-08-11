@@ -3,23 +3,132 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "lldb.terminalPromptClear" : null,
-    // "terminal.integrated.shell.windows": "C:\\Windows\\System32\\cmd.exe",
     "configurations": [
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'rete'",
+            "name": "Debug unit tests in library 'hash-trie'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=rete"
+                    "--package=hash-trie"
                 ],
                 "filter": {
-                    "name": "rete",
+                    "name": "hash-trie",
                     "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'map'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=map",
+                    "--package=hash-trie"
+                ],
+                "filter": {
+                    "name": "map",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'map'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=map",
+                    "--package=hash-trie"
+                ],
+                "filter": {
+                    "name": "map",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'set'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=set",
+                    "--package=hash-trie"
+                ],
+                "filter": {
+                    "name": "set",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'set'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=set",
+                    "--package=hash-trie"
+                ],
+                "filter": {
+                    "name": "set",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'set_xor'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=set_xor",
+                    "--package=hash-trie"
+                ],
+                "filter": {
+                    "name": "set_xor",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'set_xor'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=set_xor",
+                    "--package=hash-trie"
+                ],
+                "filter": {
+                    "name": "set_xor",
+                    "kind": "example"
                 }
             },
             "args": [],

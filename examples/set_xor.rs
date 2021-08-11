@@ -36,8 +36,6 @@ fn hash_set(lefts: &[i32], rights: &[i32], xored: &mut HashSet<i32>) -> u128 {
 
     *xored = hash_set.clone();
 
-    println!("HashSet xor: {} µs", t1.duration_since(t0).unwrap().as_micros());
-
     t1.duration_since(t0).unwrap().as_micros()
 }
 
@@ -63,8 +61,6 @@ fn im_hash_set(lefts: &[i32], rights: &[i32], xored: &HashSet<i32>) -> u128 {
         cmp.insert(k);
     }
     assert_eq!(cmp, *xored);
-
-    println!("ImHashSet xor: {} µs", t1.duration_since(t0).unwrap().as_micros());
 
     t1.duration_since(t0).unwrap().as_micros()
 }
@@ -98,9 +94,6 @@ fn hash_trie_set_transform_with_transformed(lefts: &[i32], rights: &[i32], xored
     hash_set.visit(|&k| {cmp.lock().unwrap().insert(k);});
     assert_eq!(*cmp.lock().unwrap(), *xored);
 
-    println!("HashTrieSet transform with transformed xor: {} µs",
-        t1.duration_since(t0).unwrap().as_micros());
-
     t1.duration_since(t0).unwrap().as_micros()
 }
 
@@ -132,9 +125,6 @@ fn hash_trie_set_transform_with_transmuted(lefts: &[i32], rights: &[i32], xored:
     let cmp = Arc::new(Mutex::new(HashSet::new()));
     hash_set.visit(|&k| {cmp.lock().unwrap().insert(k);});
     assert_eq!(*cmp.lock().unwrap(), *xored);
-
-    println!("HashTrieSet transform with transmuted xor: {} µs",
-        t1.duration_since(t0).unwrap().as_micros());
 
     t1.duration_since(t0).unwrap().as_micros()
 }
@@ -168,9 +158,6 @@ fn hash_trie_set_transmute_with_transformed(lefts: &[i32], rights: &[i32], xored
     hash_set.visit(|&k| {cmp.lock().unwrap().insert(k);});
     assert_eq!(*cmp.lock().unwrap(), *xored);
 
-    println!("HashTrieSet transmute with transformed xor: {} µs",
-        t1.duration_since(t0).unwrap().as_micros());
-
     t1.duration_since(t0).unwrap().as_micros()
 }
 
@@ -202,9 +189,6 @@ fn hash_trie_set_transmute_with_transmuted(lefts: &[i32], rights: &[i32], xored:
     let cmp = Arc::new(Mutex::new(HashSet::new()));
     hash_set.visit(|&k| {cmp.lock().unwrap().insert(k);});
     assert_eq!(*cmp.lock().unwrap(), *xored);
-
-    println!("HashTrieSet transmute with transmuted xor: {} µs",
-        t1.duration_since(t0).unwrap().as_micros());
 
     t1.duration_since(t0).unwrap().as_micros()
 }
