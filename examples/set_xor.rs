@@ -1,5 +1,5 @@
 use fnv::FnvHasher;
-use hash_trie::{*, functions::*};
+use hash_trie::{*, results::*, transformations::*};
 use im::HashSet as ImHashSet;
 use std::{collections::{hash_set::HashSet}, sync::{Arc, Mutex}, time::SystemTime, vec::Vec};
 use rand::Rng;
@@ -86,7 +86,8 @@ fn hash_trie_set_transform_with_transformed(lefts: &[i32], rights: &[i32], xored
         |_,_| (), 
         new_set_joint_transform_removed(()),
         new_set_transform_unchanged(()),
-        new_set_transform_unchanged(())).0;
+        new_set_transform_unchanged(()),
+    ParallelismStrategy::default_par()).0;
 
     let t1 = SystemTime::now();
     
@@ -118,7 +119,8 @@ fn hash_trie_set_transform_with_transmuted(lefts: &[i32], rights: &[i32], xored:
         |_,_| (), 
         new_set_transform_transmute_removed(()),
         new_set_transform_unchanged(()),
-        new_set_transmute_generic(|r| SetTransmuteResult::Transmuted(*r, ()))).0 };
+        new_set_transmute_generic(|r| SetTransmuteResult::Transmuted(*r, ())),
+    ParallelismStrategy::default_par()).0 };
 
     let t1 = SystemTime::now();
     
@@ -150,7 +152,8 @@ fn hash_trie_set_transmute_with_transformed(lefts: &[i32], rights: &[i32], xored
         |_,_| (), 
         new_set_transform_transmute_removed(()),
         new_set_transmute_generic(|l| SetTransmuteResult::Transmuted(*l, ())),
-        new_set_transform_unchanged(())).0 };
+        new_set_transform_unchanged(()),
+        ParallelismStrategy::default_par()).0 };
 
     let t1 = SystemTime::now();
     

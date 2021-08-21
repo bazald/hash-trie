@@ -1,4 +1,4 @@
-use crate::{flag::*, functions::*, traits::*, node::*, result::*, HashTrieError};
+use crate::{ParallelismStrategy, flag::*, transformations::*, node::*, results::*, traits::*};
 use alloc::{fmt::Debug};
 use core::hash::Hash;
 
@@ -63,14 +63,14 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     pub(crate) fn transform<ReduceT, ReduceOp, Op>
-        (&self, reduce_op: ReduceOp, op: MapTransform<ReduceT, Op>) -> (Self, ReduceT)
+        (&self, reduce_op: ReduceOp, op: MapTransform<ReduceT, Op>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-        Op: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
+        Op: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     {
-        match self.root.transform(reduce_op, op) {
+        match self.root.transform(reduce_op, op, par_strat) {
             MNodeTransformResult::Unchanged(reduced) => (self.clone(), reduced),
             MNodeTransformResult::C(cnode, reduced) => (Self::singleton(MNode::C(cnode)), reduced),
             MNodeTransformResult::L(lnode, reduced) => (Self::singleton(MNode::L(lnode)), reduced),
@@ -83,8 +83,8 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         (&self, reduce_op: ReduceOp, op: MapTransmute<ReduceT, Op>) -> (HashTrie<H, F, S, X, M>, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         Op: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,
         K: HashLike<S>,
         K: PartialEq<S>,
@@ -99,16 +99,16 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     pub(crate) fn transform_with_transformed<ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &Self, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>) -> (Self, ReduceT)
+        (&self, right: &Self, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone,
-        LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
-        RightOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
+        RightOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     {
-        match self.root.transform_with_transformed(&right.root, reduce_op, both_op, left_op, right_op, 0) {
+        match self.root.transform_with_transformed(&right.root, reduce_op, both_op, left_op, right_op, 0, par_strat) {
             MNodeJointTransformResult::UnchangedLR(reduced) | MNodeJointTransformResult::UnchangedL(reduced) => (self.clone(), reduced),
             MNodeJointTransformResult::UnchangedR(reduced) => (right.clone(), reduced),
             MNodeJointTransformResult::C(cnode, reduced) => (HashTrie::singleton(MNode::C(cnode)), reduced),
@@ -119,21 +119,21 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     pub(crate) unsafe fn transform_with_transmuted<L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> (Self, ReduceT)
+        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<V, ReduceT> + Clone,
-        LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
-        RightOp: Fn(&L, &W) -> MapTransmuteResult<K, V, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
+        RightOp: Fn(&L, &W) -> MapTransmuteResult<K, V, ReduceT> + Clone + Send + Sync,
         K: HashLike<L>,
         K: PartialEq<L>,
         L: HashLike<K>,
         L: PartialEq<K>,
         M: HasherBv<H, L>,
     {
-        match self.root.transform_with_transmuted(&right.root, reduce_op, both_op, left_op, right_op, 0) {
+        match self.root.transform_with_transmuted(&right.root, reduce_op, both_op, left_op, right_op, 0, par_strat) {
             MNodeTransformResult::Unchanged(reduced) => (self.clone(), reduced),
             MNodeTransformResult::C(cnode, reduced) => (HashTrie::singleton(MNode::C(cnode)), reduced),
             MNodeTransformResult::L(lnode, reduced) => (HashTrie::singleton(MNode::L(lnode)), reduced),
@@ -143,21 +143,21 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     pub(crate) unsafe fn transmute_with_transformed<L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>) -> (HashTrie<H, F, L, W, M>, ReduceT)
+        (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (HashTrie<H, F, L, W, M>, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<W, ReduceT> + Clone,
-        LeftOp: Fn(&K, &V) -> MapTransmuteResult<L, W, ReduceT> + Clone,
-        RightOp: Fn(&L, &W) -> MapTransformResult<W, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransmuteResult<L, W, ReduceT> + Clone + Send + Sync,
+        RightOp: Fn(&L, &W) -> MapTransformResult<W, ReduceT> + Clone + Send + Sync,
         K: HashLike<L>,
         K: PartialEq<L>,
         L: HashLike<K>,
         L: PartialEq<K>,
         M: HasherBv<H, L>,
     {
-        match self.root.transmute_with_transformed(&right.root, reduce_op, both_op, left_op, right_op, 0) {
+        match self.root.transmute_with_transformed(&right.root, reduce_op, both_op, left_op, right_op, 0, par_strat) {
             MNodeTransformResult::Unchanged(reduced) => (right.clone(), reduced),
             MNodeTransformResult::C(cnode, reduced) => (HashTrie::singleton(MNode::C(cnode)), reduced),
             MNodeTransformResult::L(lnode, reduced) => (HashTrie::singleton(MNode::L(lnode)), reduced),
@@ -170,8 +170,8 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransmute<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> (HashTrie<H, F, S, X, M>, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &V, &L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
         LeftOp: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,
         RightOp: Fn(&L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,

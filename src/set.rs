@@ -1,4 +1,4 @@
-use crate::{functions::*, traits::*, hash_trie::HashTrie, *};
+use crate::{results::*, transformations::*, traits::*, hash_trie::HashTrie, *};
 use alloc::fmt::Debug;
 
 /// `HashTrieSet` implements a hash set using a hash array mapped trie (HAMT).
@@ -110,12 +110,12 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
 
     /// Run a transform operation on each entry in the set. Returns the transformed set and a reduction of the secondary returns of the transform operations.
     pub fn transform<ReduceT, ReduceOp, Op>
-        (&self, reduce_op: ReduceOp, op: SetTransform<ReduceT, Op>) -> (Self, ReduceT)
+        (&self, reduce_op: ReduceOp, op: SetTransform<ReduceT, Op>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-        Op: Fn(&K) -> SetTransformResult<ReduceT> + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
+        Op: Fn(&K) -> SetTransformResult<ReduceT> + Clone + Send + Sync,
     {
         let (set, reduced) = self.set.transform(reduce_op, match op {
             SetTransform::Generic(f) => new_map_transform_generic(move |key, _value| match f(key) {
@@ -124,7 +124,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
             }),
             SetTransform::Unchanged(r) => MapTransform::Unchanged(r),
             SetTransform::Removed(r) => MapTransform::Removed(r),
-        });
+        }, par_strat);
         (Self{set}, reduced)
     }
 
@@ -133,9 +133,9 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         (&self, reduce_op: ReduceOp, op: SetTransmute<ReduceT, Op>) -> (HashTrieSet<H, F, S, M>, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-        Op: Fn(&K) -> SetTransmuteResult<S, ReduceT> + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
+        Op: Fn(&K) -> SetTransmuteResult<S, ReduceT> + Clone + Send + Sync,
         K: HashLike<S>,
         K: PartialEq<S>,
         M: HasherBv<H, S>,
@@ -152,14 +152,14 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
 
     /// Run a transform operation on each entry or pair of entries in the sets. Returns the transformed set and a reduction of the secondary returns of the transmute operations. Can reuse nodes from either set.
     pub fn transform_with_transformed<ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &Self, reduce_op: ReduceOp, both_op: SetJointTransform<ReduceT, BothOp>, left_op: SetTransform<ReduceT, LeftOp>, right_op: SetTransform<ReduceT, RightOp>) -> (Self, ReduceT)
+        (&self, right: &Self, reduce_op: ReduceOp, both_op: SetJointTransform<ReduceT, BothOp>, left_op: SetTransform<ReduceT, LeftOp>, right_op: SetTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &K) -> SetJointTransformResult<ReduceT> + Clone,
-        LeftOp: Fn(&K) -> SetTransformResult<ReduceT> + Clone,
-        RightOp: Fn(&K) -> SetTransformResult<ReduceT> + Clone,
+        LeftOp: Fn(&K) -> SetTransformResult<ReduceT> + Clone + Send + Sync,
+        RightOp: Fn(&K) -> SetTransformResult<ReduceT> + Clone + Send + Sync,
     {
         let (set, reduced) = self.set.transform_with_transformed(&right.set, reduce_op,
             match both_op {
@@ -178,20 +178,20 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
                 SetTransform::Generic(f) => MapTransform::Generic(move |r: &_, _: &_| f(r).into()),
                 SetTransform::Unchanged(r) => MapTransform::Unchanged(r),
                 SetTransform::Removed(r) => MapTransform::Removed(r),
-            });
+            }, par_strat);
         (HashTrieSet{set}, reduced)
     }
 
     /// Run a transform/transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed set.
     pub unsafe fn transform_with_transmuted<L: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: SetTransform<ReduceT, BothOp>, left_op: SetTransform<ReduceT, LeftOp>, right_op: SetTransmute<ReduceT, RightOp>) -> (Self, ReduceT)
+        (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: SetTransform<ReduceT, BothOp>, left_op: SetTransform<ReduceT, LeftOp>, right_op: SetTransmute<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &L) -> SetTransformResult<ReduceT> + Clone,
-        LeftOp: Fn(&K) -> SetTransformResult<ReduceT> + Clone,
-        RightOp: Fn(&L) -> SetTransmuteResult<K, ReduceT> + Clone,
+        LeftOp: Fn(&K) -> SetTransformResult<ReduceT> + Clone + Send + Sync,
+        RightOp: Fn(&L) -> SetTransmuteResult<K, ReduceT> + Clone + Send + Sync,
         K: HashLike<L>,
         K: PartialEq<L>,
         L: HashLike<K>,
@@ -211,20 +211,20 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
                     SetTransmuteResult::Removed(r) => MapTransmuteResult::Removed(r),
                 }),
                 SetTransmute::Removed(r) => MapTransmute::Removed(r),
-            });
+            }, par_strat);
         (HashTrieSet{set}, reduced)
     }
 
     /// Run a transmute/transform operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed set.
     pub unsafe fn transmute_with_transformed<L: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: SetTransform<ReduceT, BothOp>, left_op: SetTransmute<ReduceT, LeftOp>, right_op: SetTransform<ReduceT, RightOp>) -> (HashTrieSet<H, F, L, M>, ReduceT)
+        (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: SetTransform<ReduceT, BothOp>, left_op: SetTransmute<ReduceT, LeftOp>, right_op: SetTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (HashTrieSet<H, F, L, M>, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &L) -> SetTransformResult<ReduceT> + Clone,
-        LeftOp: Fn(&K) -> SetTransmuteResult<L, ReduceT> + Clone,
-        RightOp: Fn(&L) -> SetTransformResult<ReduceT> + Clone,
+        LeftOp: Fn(&K) -> SetTransmuteResult<L, ReduceT> + Clone + Send + Sync,
+        RightOp: Fn(&L) -> SetTransformResult<ReduceT> + Clone + Send + Sync,
         K: HashLike<L>,
         K: PartialEq<L>,
         L: HashLike<K>,
@@ -244,7 +244,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
                 SetTransform::Generic(f) => MapTransform::Generic(move |r: &_, _: &_| f(r).into()),
                 SetTransform::Unchanged(r) => MapTransform::Unchanged(r),
                 SetTransform::Removed(r) => MapTransform::Removed(r),
-            });
+            }, par_strat);
         (HashTrieSet{set}, reduced)
     }
 
@@ -253,8 +253,8 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: SetTransmute<ReduceT, BothOp>, left_op: SetTransmute<ReduceT, LeftOp>, right_op: SetTransmute<ReduceT, RightOp>) -> (HashTrieSet<H, F, S, M>, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &L) -> SetTransmuteResult<S, ReduceT> + Clone,
         LeftOp: Fn(&K) -> SetTransmuteResult<S, ReduceT> + Clone,
         RightOp: Fn(&L) -> SetTransmuteResult<S, ReduceT> + Clone,
@@ -309,7 +309,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> PartialEq for Hash
 
 #[cfg(test)]
 mod tests {
-    use crate::{*, functions::*};
+    use crate::{*, results::*, transformations::*};
     use rand::Rng;
     
     #[test]
@@ -320,8 +320,8 @@ mod tests {
             set = set.insert(i, false).unwrap().0;
         }
 
-        let removed = set.transform(|_,_| (), new_set_transform_removed(()));
-        let summed = set.transform(|&l,&r| l + r, new_set_transform_generic(|&k| SetTransformResult::Removed(k)));
+        let removed = set.transform(|_,_| (), new_set_transform_removed(()), ParallelismStrategy::default_par());
+        let summed = set.transform(|&l,&r| l + r, new_set_transform_generic(|&k| SetTransformResult::Removed(k)), ParallelismStrategy::default_par());
 
         assert_eq!(removed.0.size(), 0);
         assert_eq!(summed.1, 5050);
@@ -362,20 +362,23 @@ mod tests {
             |l,r| -> i32 {l.wrapping_add(*r)},
             new_set_joint_transform_generic(|l: &i32, r: &i32| SetJointTransformResult::Removed(l.wrapping_mul(*r))),
             new_set_transform_generic(|l| SetTransformResult::Unchanged(*l)),
-            new_set_transform_generic(|r| SetTransformResult::Unchanged(*r)));
+            new_set_transform_generic(|r| SetTransformResult::Unchanged(*r)),
+        ParallelismStrategy::default_par());
         let fm = unsafe { seta.transform_with_transmuted(
             &setb, 
             |l,r| -> i32 {l.wrapping_add(*r)},
             new_set_transform_transmute_generic(|l: &i32, r| SetTransformResult::Removed(l.wrapping_mul(*r))),
             new_set_transform_generic(|l| SetTransformResult::Unchanged(*l)),
-            new_set_transmute_generic(|r| SetTransmuteResult::Transmuted(*r, *r)))
+            new_set_transmute_generic(|r| SetTransmuteResult::Transmuted(*r, *r)),
+        ParallelismStrategy::default_par())
         };
         let mf = unsafe { seta.transmute_with_transformed(
             &setb, 
             |l,r| -> i32 {l.wrapping_add(*r)},
             new_set_transform_transmute_generic(|l: &i32, r| SetTransformResult::Removed(l.wrapping_mul(*r))),
             new_set_transmute_generic(|l| SetTransmuteResult::Transmuted(*l, *l)),
-            new_set_transform_generic(|r| SetTransformResult::Unchanged(*r)))
+            new_set_transform_generic(|r| SetTransformResult::Unchanged(*r)),
+        ParallelismStrategy::default_par())
         };
         let mm = unsafe { seta.transmute_with_transmuted(
             &setb, 
@@ -389,10 +392,10 @@ mod tests {
         assert_eq!(ff.1, mf.1);
         assert_eq!(ff.1, mm.1);
 
-        let ffx = ff.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)));
-        let fmx = fm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)));
-        let mfx = mf.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)));
-        let mmx = mm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)));
+        let ffx = ff.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)), ParallelismStrategy::default_par());
+        let fmx = fm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)), ParallelismStrategy::default_par());
+        let mfx = mf.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)), ParallelismStrategy::default_par());
+        let mmx = mm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)), ParallelismStrategy::default_par());
 
         assert_eq!(ffx.1, fmx.1);
         assert_eq!(ffx.1, mfx.1);

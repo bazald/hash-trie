@@ -1,4 +1,4 @@
-use crate::{result::BitError, traits::*};
+use crate::{results::BitError, traits::*};
 use alloc::{borrow::Cow, boxed::Box, fmt::{Debug, Formatter}};
 use core::{cmp::Ordering, mem, ptr};
 
@@ -255,8 +255,7 @@ impl <'a, B: 'static, V: Clone + 'static, E: Clone + 'static> BitIndexedArrayVal
         }
     }
 }
-
-#[must_use]
+    #[must_use]
 pub(crate) fn default_bit_indexed_array<B: BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Default + NthBit + PartialEq + 'static, V: Clone + 'static, E: Clone + Default + 'static>() -> Box<dyn BitIndexedArray<B, V, E>> {
     Box::new(BitIndexedArrayImpl::<B, V, E, 0>::default())
 }

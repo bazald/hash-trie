@@ -1,4 +1,4 @@
-use crate::{functions::*, traits::*, hash_trie::HashTrie, *};
+use crate::{results::*, transformations::*, traits::*, hash_trie::HashTrie, *};
 use alloc::fmt::Debug;
 
 /// `HashTrieMap` implements a hash map using a hash array mapped trie (HAMT).
@@ -113,14 +113,14 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
 
     /// Run a transform operation on each entry in the map. Returns the transformed map and a reduction of the secondary returns of the transform operations.
     pub fn transform<ReduceT, ReduceOp, Op>
-        (&self, reduce_op: ReduceOp, op: MapTransform<ReduceT, Op>) -> (Self, ReduceT)
+        (&self, reduce_op: ReduceOp, op: MapTransform<ReduceT, Op>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
-        Op: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
+        Op: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync
     {
-        let (set, reduced) = self.set.transform(reduce_op, op);
+        let (set, reduced) = self.set.transform(reduce_op, op, par_strat);
         (Self{set}, reduced)
     }
 
@@ -129,8 +129,8 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         (&self, reduce_op: ReduceOp, op: MapTransmute<ReduceT, Op>) -> (HashTrieMap<H, F, S, X, M>, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         Op: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,
         K: HashLike<S>,
         K: PartialEq<S>,
@@ -142,29 +142,29 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
 
     /// Run a transform operation on each entry or pair of entries in the maps. Returns the transformed map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from either map.
     pub fn transform_with_transformed<ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &Self, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>) -> (Self, ReduceT)
+        (&self, right: &Self, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone,
-        LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
-        RightOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
+        RightOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     {
-        let (set, reduced) = self.set.transform_with_transformed(&right.set, reduce_op, both_op, left_op, right_op);
+        let (set, reduced) = self.set.transform_with_transformed(&right.set, reduce_op, both_op, left_op, right_op, par_strat);
         (HashTrieMap{set}, reduced)
     }
 
     /// Run a transform/transmute operation on each entry or pair of entries in the maps. Returns the transmuted map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed map. Like transform_with_transmuted but enforces identity transformations on keys.
     pub fn transform_with_transfuted<W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrieMap<H, F, K, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: SetTransmute<ReduceT, RightOp>) -> (Self, ReduceT)
+        (&self, right: &HashTrieMap<H, F, K, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: SetTransmute<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &V, &K, &W) -> MapTransformResult<V, ReduceT> + Clone,
-        LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
-        RightOp: Fn(&K, &W) -> SetTransmuteResult<V, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
+        RightOp: Fn(&K, &W) -> SetTransmuteResult<V, ReduceT> + Clone + Send + Sync,
     {
         let (set, reduced) = unsafe {
             self.set.transform_with_transmuted(&right.set, reduce_op, both_op, left_op, match right_op {
@@ -173,41 +173,41 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
                     SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
                 }),
                 SetTransmute::Removed(r) => MapTransmute::Removed(r),
-            })
+            }, par_strat)
         };
         (HashTrieMap{set}, reduced)
     }
 
     /// Run a transform/transmute operation on each entry or pair of entries in the maps. Returns the transmuted map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed map.
     pub unsafe fn transform_with_transmuted<L: Key + HashLike<K>, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrieMap<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> (Self, ReduceT)
+        (&self, right: &HashTrieMap<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<V, ReduceT> + Clone,
-        LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone,
-        RightOp: Fn(&L, &W) -> MapTransmuteResult<K, V, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
+        RightOp: Fn(&L, &W) -> MapTransmuteResult<K, V, ReduceT> + Clone + Send + Sync,
         K: HashLike<L>,
         K: PartialEq<L>,
         L: HashLike<K>,
         L: PartialEq<K>,
         M: HasherBv<H, L>,
     {
-        let (set, reduced) = self.set.transform_with_transmuted(&right.set, reduce_op, both_op, left_op, right_op);
+        let (set, reduced) = self.set.transform_with_transmuted(&right.set, reduce_op, both_op, left_op, right_op, par_strat);
         (HashTrieMap{set}, reduced)
     }
 
     /// Run a transmute/transform operation on each entry or pair of entries in the maps. Returns the transmuted map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed map. Like transmute_with_transformed but enforces identity transformations on keys.
     pub fn transfute_with_transformed<W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrieMap<H, F, K, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: SetTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>) -> (HashTrieMap<H, F, K, W, M>, ReduceT)
+        (&self, right: &HashTrieMap<H, F, K, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: SetTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (HashTrieMap<H, F, K, W, M>, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &V, &K, &W) -> MapTransformResult<W, ReduceT> + Clone,
-        LeftOp: Fn(&K, &V) -> SetTransmuteResult<W, ReduceT> + Clone,
-        RightOp: Fn(&K, &W) -> MapTransformResult<W, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> SetTransmuteResult<W, ReduceT> + Clone + Send + Sync,
+        RightOp: Fn(&K, &W) -> MapTransformResult<W, ReduceT> + Clone + Send + Sync,
     {
         let (set, reduced) = unsafe {
             self.set.transmute_with_transformed(&right.set, reduce_op, both_op, match left_op {
@@ -216,28 +216,28 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
                     SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
                 }),
                 SetTransmute::Removed(r) => MapTransmute::Removed(r),
-            }, right_op)
+            }, right_op, par_strat)
         };
         (HashTrieMap{set}, reduced)
     }
 
     /// Run a transmute/transform operation on each entry or pair of entries in the maps. Returns the transmuted map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed map.
     pub unsafe fn transmute_with_transformed<L: Key + HashLike<K>, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
-        (&self, right: &HashTrieMap<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>) -> (HashTrieMap<H, F, L, W, M>, ReduceT)
+        (&self, right: &HashTrieMap<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (HashTrieMap<H, F, L, W, M>, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &V, &L, &W) -> MapTransformResult<W, ReduceT> + Clone,
-        LeftOp: Fn(&K, &V) -> MapTransmuteResult<L, W, ReduceT> + Clone,
-        RightOp: Fn(&L, &W) -> MapTransformResult<W, ReduceT> + Clone,
+        LeftOp: Fn(&K, &V) -> MapTransmuteResult<L, W, ReduceT> + Clone + Send + Sync,
+        RightOp: Fn(&L, &W) -> MapTransformResult<W, ReduceT> + Clone + Send + Sync,
         K: HashLike<L>,
         K: PartialEq<L>,
         L: HashLike<K>,
         L: PartialEq<K>,
         M: HasherBv<H, L>,
     {
-        let (set, reduced) = self.set.transmute_with_transformed(&right.set, reduce_op, both_op, left_op, right_op);
+        let (set, reduced) = self.set.transmute_with_transformed(&right.set, reduce_op, both_op, left_op, right_op, par_strat);
         (HashTrieMap{set}, reduced)
     }
 
@@ -246,8 +246,8 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         (&self, right: &HashTrieMap<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransmute<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>) -> (HashTrieMap<H, F, S, X, M>, ReduceT)
         where
         Self: Sized,
-        ReduceT: Clone + Default,
-        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone,
+        ReduceT: Clone + Default + Send + Sync,
+        ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         BothOp: Fn(&K, &V, &L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
         LeftOp: Fn(&K, &V) -> MapTransmuteResult<S, X, ReduceT> + Clone,
         RightOp: Fn(&L, &W) -> MapTransmuteResult<S, X, ReduceT> + Clone,
@@ -284,7 +284,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> PartialE
 
 #[cfg(test)]
 mod tests {
-    use crate::{*, functions::{new_map_joint_transform_generic, new_map_transform_generic, new_map_transform_removed, new_map_transform_transmute_generic, new_map_transmute_generic, new_map_transmute_removed, new_map_transmute_transform_generic, new_map_transmute_transmute_generic}};
+    use crate::{*, results::*, transformations::{new_map_joint_transform_generic, new_map_transform_generic, new_map_transform_removed, new_map_transform_transmute_generic, new_map_transmute_generic, new_map_transmute_removed, new_map_transmute_transform_generic, new_map_transmute_transmute_generic}};
     use rand::Rng;
     
     #[test]
@@ -297,8 +297,8 @@ mod tests {
             squared = squared.insert(i, i * i, false).unwrap().0;
         }
 
-        let removed = map.transform(|_,_| (), new_map_transform_removed(()));
-        let tsquared = map.transform(|_,_| (), new_map_transform_generic(|_,v| MapTransformResult::Transformed(v * v, ())));
+        let removed = map.transform(|_,_| (), new_map_transform_removed(()), ParallelismStrategy::default_par());
+        let tsquared = map.transform(|_,_| (), new_map_transform_generic(|_,v| MapTransformResult::Transformed(v * v, ())), ParallelismStrategy::default_par());
 
         assert_eq!(removed.0.size(), 0);
 
@@ -347,11 +347,11 @@ mod tests {
         }
 
         let ff = mapa.transform_with_transformed(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
-        new_map_joint_transform_generic(|_,v:&i32,_,w| MapJointTransformResult::Removed(v.wrapping_mul(*w))), new_map_transform_generic(|_, v: &i32| MapTransformResult::Unchanged(*v)), new_map_transform_generic(|_,v| MapTransformResult::Unchanged(*v)));
+        new_map_joint_transform_generic(|_,v:&i32,_,w| MapJointTransformResult::Removed(v.wrapping_mul(*w))), new_map_transform_generic(|_, v: &i32| MapTransformResult::Unchanged(*v)), new_map_transform_generic(|_,v| MapTransformResult::Unchanged(*v)), ParallelismStrategy::default_par());
         let fm = unsafe { mapa.transform_with_transmuted(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
-            new_map_transform_transmute_generic(|_,v:&i32,_,w| MapTransformResult::Removed(v.wrapping_mul(*w))), new_map_transform_generic(|_,v| MapTransformResult::Unchanged(*v)), new_map_transmute_generic(|k,v| MapTransmuteResult::Transmuted(*k, *v, *v))) };
+            new_map_transform_transmute_generic(|_,v:&i32,_,w| MapTransformResult::Removed(v.wrapping_mul(*w))), new_map_transform_generic(|_,v| MapTransformResult::Unchanged(*v)), new_map_transmute_generic(|k,v| MapTransmuteResult::Transmuted(*k, *v, *v)), ParallelismStrategy::default_par()) };
         let mf = unsafe { mapa.transmute_with_transformed(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
-            new_map_transmute_transform_generic(|_,v:&i32,_,w| MapTransformResult::Removed(v.wrapping_mul(*w))), new_map_transmute_generic(|k,v| MapTransmuteResult::Transmuted(*k, *v, *v)), new_map_transform_generic(|_,v| MapTransformResult::Unchanged(*v))) };
+            new_map_transmute_transform_generic(|_,v:&i32,_,w| MapTransformResult::Removed(v.wrapping_mul(*w))), new_map_transmute_generic(|k,v| MapTransmuteResult::Transmuted(*k, *v, *v)), new_map_transform_generic(|_,v| MapTransformResult::Unchanged(*v)), ParallelismStrategy::default_par()) };
         let mm = unsafe { mapa.transmute_with_transmuted(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
             new_map_transmute_transmute_generic(|_,v:&i32,_,w| MapTransmuteResult::Removed(v.wrapping_mul(*w))), new_map_transmute_generic(|k,v| MapTransmuteResult::Transmuted(*k, *v, *v)), new_map_transmute_generic(|k,v| MapTransmuteResult::Transmuted(*k, *v, *v))) };
 
@@ -359,10 +359,10 @@ mod tests {
         assert_eq!(ff.1, mf.1);
         assert_eq!(ff.1, mm.1);
 
-        let ffx = ff.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)));
-        let fmx = fm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)));
-        let mfx = mf.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)));
-        let mmx = mm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)));
+        let ffx = ff.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)), ParallelismStrategy::default_par());
+        let fmx = fm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)), ParallelismStrategy::default_par());
+        let mfx = mf.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)), ParallelismStrategy::default_par());
+        let mmx = mm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)), ParallelismStrategy::default_par());
 
         assert_eq!(ffx.1, fmx.1);
         assert_eq!(ffx.1, mfx.1);

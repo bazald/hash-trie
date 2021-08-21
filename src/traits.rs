@@ -1,4 +1,4 @@
-use crate::result::BitError;
+use crate::results::BitError;
 use alloc::fmt::Debug;
 use core::{convert::{TryFrom, TryInto}, hash::{Hash, Hasher}, mem, ops::*};
 
@@ -19,12 +19,18 @@ macro_rules! bit_found {
     };
 }
 
+macro_rules! bits_not_found {
+    ( $self:expr, $bit:expr) => {
+        if $self & $bit != 0 {
+            return Err(BitError::Found);
+        }
+    };
+}
+
 macro_rules! bit_not_found {
     ( $self:expr, $bit:expr) => {
         bit_count_one!($bit);
-        if $self & $bit == 1 {
-            return Err(BitError::Found);
-        }
+        bits_not_found!($self, $bit);
     };
 }
 
@@ -90,6 +96,20 @@ impl BitInsert for u32 { fn bit_insert(&self, bit: Self) -> Result<Self, BitErro
 impl BitInsert for u64 { fn bit_insert(&self, bit: Self) -> Result<Self, BitError> {bit_not_found!(self, bit); Ok(self | bit)} }
 impl BitInsert for u128 { fn bit_insert(&self, bit: Self) -> Result<Self, BitError> {bit_not_found!(self, bit); Ok(self | bit)} }
 impl BitInsert for usize { fn bit_insert(&self, bit: Self) -> Result<Self, BitError> {bit_not_found!(self, bit); Ok(self | bit)} }
+
+/// `BitMerge` supports bitwise merging of two words.
+pub trait BitMerge {
+    /// Perform a bitwise merge of the two words or return BitError::Found.
+    /// 
+    /// e.g. `0b10010.bit_merge(0b101) == 0b10111`
+    fn bit_merge(&self, bits: Self) -> Result<Self, BitError> where Self: Sized;
+}
+impl BitMerge for u8 { fn bit_merge(&self, bits: Self) -> Result<Self, BitError> {bits_not_found!(self, bits); Ok(self | bits)} }
+impl BitMerge for u16 { fn bit_merge(&self, bits: Self) -> Result<Self, BitError> {bits_not_found!(self, bits); Ok(self | bits)} }
+impl BitMerge for u32 { fn bit_merge(&self, bits: Self) -> Result<Self, BitError> {bits_not_found!(self, bits); Ok(self | bits)} }
+impl BitMerge for u64 { fn bit_merge(&self, bits: Self) -> Result<Self, BitError> {bits_not_found!(self, bits); Ok(self | bits)} }
+impl BitMerge for u128 { fn bit_merge(&self, bits: Self) -> Result<Self, BitError> {bits_not_found!(self, bits); Ok(self | bits)} }
+impl BitMerge for usize { fn bit_merge(&self, bits: Self) -> Result<Self, BitError> {bits_not_found!(self, bits); Ok(self | bits)} }
 
 /// `BitRemove` supports removing a bit from the word.
 pub trait BitRemove {
@@ -207,9 +227,9 @@ impl <H: BitAnd + Clone + Debug + From<<Self as Shr<usize>>::Output> + MaxOnes +
 for H where H: BitAnd + Clone + Debug + From<<Self as Shr<usize>>::Output> + MaxOnes + PartialEq + Shr<usize> + 'static {}
 
 /// `Flagword` lists the requirements on CNode indices.
-pub trait Flagword<H: Hashword>: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Debug + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + MaxOnes + NthBit + PartialEq + 'static {}
-impl <H: Hashword, F: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Debug + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + MaxOnes + NthBit + PartialEq> Flagword<H>
-for F where F: AsUsize + BitContains + BitIndex + BitInsert + BitRemove + Clone + CountOnes + Debug + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + MaxOnes + NthBit + PartialEq + 'static {}
+pub trait Flagword<H: Hashword>: AsUsize + BitContains + BitIndex + BitInsert + BitMerge + BitRemove + Clone + CountOnes + Debug + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + MaxOnes + NthBit + PartialEq + Send + Sync + 'static {}
+impl <H: Hashword, F: AsUsize + BitContains + BitIndex + BitInsert + BitMerge + BitRemove + Clone + CountOnes + Debug + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + MaxOnes + NthBit + PartialEq + Send + Sync> Flagword<H>
+for F where F: AsUsize + BitContains + BitIndex + BitInsert + BitMerge + BitRemove + Clone + CountOnes + Debug + Default + TryFrom<<H as BitAnd>::Output> + LogB + MaskLogB<H> + MaxOnes + NthBit + PartialEq + Send + Sync + 'static {}
 
 /// `Key` lists the requirements on the key type for the hash array mapped trie to function.
 pub trait Key: Clone + Debug + Eq + PartialEq + Hash + Send + Sync + 'static {}
