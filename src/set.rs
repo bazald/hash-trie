@@ -157,7 +157,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
         Self: Sized,
         ReduceT: Clone + Default + Send + Sync,
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
-        BothOp: Fn(&K, &K) -> SetJointTransformResult<ReduceT> + Clone,
+        BothOp: Fn(&K, &K) -> SetJointTransformResult<ReduceT> + Clone + Send + Sync,
         LeftOp: Fn(&K) -> SetTransformResult<ReduceT> + Clone + Send + Sync,
         RightOp: Fn(&K) -> SetTransformResult<ReduceT> + Clone + Send + Sync,
     {

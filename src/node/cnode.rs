@@ -129,16 +129,17 @@ where
         MapTransform::Removed(r) => return MNodeTransformResult::Removed(r),
     }
 
-    let (size, bits, mut values, changed, reduced) = {
+    let (size, bits, mut values, unchanged, reduced) = {
         #[cfg(feature = "parallel")]
         match par_strat {
             ParallelismStrategy::MiddleIndex => {
-                let ((lsize, lbits, mut lvalues, lc, rl), (rsize, rbits, mut rvalues, rc, rr)) = rayon::join(
-                    || transform_impl(this, reduce_op.clone(), op.clone(), 0..F::max_ones()/2, par_strat),
-                    || transform_impl(this, reduce_op.clone(), op.clone(), F::max_ones()/2..F::max_ones(), par_strat));
+                let op_clone = op.clone();
+                let ((lsize, lbits, mut lvalues, luc, rl), (rsize, rbits, mut rvalues, ruc, rr)) = rayon::join(
+                    || transform_impl(this, reduce_op.clone(), op, 0..F::max_ones()/2, par_strat),
+                    || transform_impl(this, reduce_op.clone(), op_clone, F::max_ones()/2..F::max_ones(), par_strat));
                 lvalues.append(&mut rvalues);
         
-                (lsize + rsize, lbits.bit_merge(rbits).unwrap(), lvalues, lc || rc, reduce_op(&rl, &rr))
+                (lsize + rsize, lbits.bit_merge(rbits).unwrap(), lvalues, luc && ruc, reduce_op(&rl, &rr))
             },
             ParallelismStrategy::Sequential => transform_impl(this, reduce_op, op, 0..F::max_ones(), par_strat)
         }
@@ -147,7 +148,10 @@ where
         transform_impl(this, reduce_op, op, 0..F::max_ones(), par_strat)
     };
 
-    if changed {
+    if unchanged {
+        MNodeTransformResult::Unchanged(reduced)
+    }
+    else {
         match values.len() {
             0 => MNodeTransformResult::Removed(reduced),
             1 => match values.pop().unwrap() {
@@ -157,9 +161,6 @@ where
             },
             _ => MNodeTransformResult::C(CNode::new(new_bit_indexed_array(bits, BitIndexedArrayVec::new(&values), size).unwrap()), reduced),
         }
-    }
-    else {
-        MNodeTransformResult::Unchanged(reduced)
     }
 }
 
@@ -174,7 +175,7 @@ where
     let mut size = 0;
     let mut bits_t = F::default();
     let mut values_t = Vec::default();
-    let mut changed = false;
+    let mut unchanged = true;
     let mut reduced = ReduceT::default();
 
     for index in range {
@@ -191,31 +192,31 @@ where
                     bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                     values_t.push(MNode::C(cnode));
                     reduced = reduce_op(&reduced, &r);
-                    changed = true;
+                    unchanged = false;
                 },
                 MNodeTransformResult::L(lnode, r) => {
                     size += lnode.size();
                     bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                     values_t.push(MNode::L(lnode));
                     reduced = reduce_op(&reduced, &r);
-                    changed = true;
+                    unchanged = false;
                 },
                 MNodeTransformResult::S(snode, r) => {
                     size += 1;
                     bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
                     values_t.push(MNode::S(snode));
                     reduced = reduce_op(&reduced, &r);
-                    changed = true;
+                    unchanged = false;
                 },
                 MNodeTransformResult::Removed(r) => {
                     reduced = reduce_op(&reduced, &r);
-                    changed = true;
+                    unchanged = false;
                 },
             }
         }
     }
 
-    (size, bits_t, values_t, changed, reduced)
+    (size, bits_t, values_t, unchanged, reduced)
 }
 
 pub(super) unsafe fn transmute<H: Hashword, F: Flagword<H>, K: Key, V: Value, S: Key, X: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, Op>(this: &CNode<H, F, K, V, M>, reduce_op: ReduceOp, op: MapTransmute<ReduceT, Op>) -> MNodeTransmuteResult<H, F, S, X, M, ReduceT>
@@ -282,7 +283,7 @@ pub(crate) fn transform_with_transformed<H: Hashword, F: Flagword<H>, K: Key, V:
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
-    BothOp: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone,
+    BothOp: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone + Send + Sync,
     LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     RightOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
@@ -366,7 +367,113 @@ pub(crate) fn transform_with_transformed_cnode<H: Hashword, F: Flagword<H>, K: K
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
-    BothOp: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone,
+    BothOp: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone + Send + Sync,
+    LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
+    RightOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
+    <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
+{
+    match &both_op {
+        MapJointTransform::Generic(_,_) => {},
+        MapJointTransform::UnchangedLR(r) => {
+            match &left_op {
+                MapTransform::Generic(_) => {}
+                MapTransform::Unchanged(_) => {
+                    if let MapTransform::Removed(_) = &right_op {
+                        return MNodeJointTransformResult::UnchangedL(r.clone());
+                    }
+                },
+                MapTransform::Removed(_) => {
+                    if let MapTransform::Unchanged(_) = &right_op {
+                        return MNodeJointTransformResult::UnchangedR(r.clone());
+                    }
+                },
+            }
+        },
+        MapJointTransform::UnchangedL(r) => {
+            match &left_op {
+                MapTransform::Generic(_) => {}
+                MapTransform::Unchanged(_) => {
+                    if let MapTransform::Removed(_) = &right_op {
+                        return MNodeJointTransformResult::UnchangedL(r.clone());
+                    }
+                },
+                MapTransform::Removed(_) => {},
+            }
+        },
+        MapJointTransform::UnchangedR(r) => {
+            match &left_op {
+                MapTransform::Generic(_) => {}
+                MapTransform::Unchanged(_) => {},
+                MapTransform::Removed(_) => {
+                    if let MapTransform::Unchanged(_) = &right_op {
+                        return MNodeJointTransformResult::UnchangedR(r.clone());
+                    }
+                },
+            }
+        },
+        MapJointTransform::Removed(r) => {
+            match &left_op {
+                MapTransform::Generic(_) => {}
+                MapTransform::Unchanged(_) => {},
+                MapTransform::Removed(_) => {
+                    if let MapTransform::Removed(_) = &right_op {
+                        return MNodeJointTransformResult::Removed(r.clone());
+                    }
+                },
+            }
+        },
+    }
+
+    let (size, bits, mut values, unchangedl, unchangedr, reduced) = {
+        #[cfg(feature = "parallel")]
+        match par_strat {
+            ParallelismStrategy::MiddleIndex => {
+                let both_op_clone = both_op.clone();
+                let left_op_clone = left_op.clone();
+                let right_op_clone = right_op.clone();
+                let ((lsize, lbits, mut lvalues, lucl, lucr, rl), (rsize, rbits, mut rvalues, rucl, rucr, rr)) = rayon::join(
+                    || transform_with_transformed_cnode_impl(this, right, reduce_op.clone(), both_op, left_op, right_op, depth, 0..F::max_ones()/2, par_strat),
+                    || transform_with_transformed_cnode_impl(this, right, reduce_op.clone(), both_op_clone, left_op_clone, right_op_clone, depth, F::max_ones()/2..F::max_ones(), par_strat));
+                lvalues.append(&mut rvalues);
+        
+                (lsize + rsize, lbits.bit_merge(rbits).unwrap(), lvalues, lucl && rucl, lucr && rucr, reduce_op(&rl, &rr))
+            },
+            ParallelismStrategy::Sequential => transform_with_transformed_cnode_impl(this, right, reduce_op, both_op, left_op, right_op, depth, 0..F::max_ones(), par_strat)
+        }
+
+        #[cfg(not(feature = "parallel"))]
+        transform_with_transformed_cnode_impl(this, right, reduce_op, both_op, left_op, right_op, depth, 0..F::max_ones(), par_strat)
+    };
+
+    if unchangedl {
+        if unchangedr {
+            MNodeJointTransformResult::UnchangedLR(reduced)
+        }
+        else {
+            MNodeJointTransformResult::UnchangedL(reduced)
+        }
+    }
+    else if unchangedr {
+        MNodeJointTransformResult::UnchangedR(reduced)
+    }
+    else {
+        match values.len() {
+            0 => MNodeJointTransformResult::Removed(reduced),
+            1 => match values.pop().unwrap() {
+                MNode::C(cnode) => MNodeJointTransformResult::C(CNode::new(new_bit_indexed_array(bits, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
+                MNode::L(lnode) => MNodeJointTransformResult::L(lnode, reduced),
+                MNode::S(snode) => MNodeJointTransformResult::S(snode, reduced),
+            },
+            _ => MNodeJointTransformResult::C(CNode::new(new_bit_indexed_array(bits, BitIndexedArrayVec::new(&values), size).unwrap()), reduced),
+        }
+    }
+}
+
+pub(crate) fn transform_with_transformed_cnode_impl<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &CNode<H, F, K, V, M>, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, range: Range<usize>, par_strat: ParallelismStrategy) -> (usize, F, Vec<MNode<H, F, K, V, M>>, bool, bool, ReduceT)
+where
+    ReduceT: Clone + Default + Send + Sync,
+    ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
+    BothOp: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone + Send + Sync,
     LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     RightOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
@@ -378,7 +485,7 @@ where
     let mut unchangedl = true;
     let mut unchangedr = true;
 
-    for index in 0..<F>::max_ones() {
+    for index in range {
         let mut left = None;
         let mut right_node = None;
 
@@ -465,28 +572,7 @@ where
         }
     }
 
-    if unchangedl {
-        if unchangedr {
-            MNodeJointTransformResult::UnchangedLR(reduced)
-        }
-        else {
-            MNodeJointTransformResult::UnchangedL(reduced)
-        }
-    }
-    else if unchangedr {
-        MNodeJointTransformResult::UnchangedR(reduced)
-    }
-    else {
-        match values_t.len() {
-            0 => MNodeJointTransformResult::Removed(reduced),
-            1 => match values_t.pop().unwrap() {
-                MNode::C(cnode) => MNodeJointTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&[MNode::C(cnode)]), size).unwrap()), reduced),
-                MNode::L(lnode) => MNodeJointTransformResult::L(lnode, reduced),
-                MNode::S(snode) => MNodeJointTransformResult::S(snode, reduced),
-            },
-            _ => MNodeJointTransformResult::C(CNode::new(new_bit_indexed_array(bits_t, BitIndexedArrayVec::new(&values_t), size).unwrap()), reduced),
-        }
-    }
+    (size, bits_t, values_t, unchangedl, unchangedr, reduced)
 }
 
 pub(crate) unsafe fn transform_with_transmuted_cnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &CNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
@@ -750,7 +836,7 @@ pub(crate) fn transform_with_transformed_lnode<H: Hashword, F: Flagword<H>, K: K
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
-    BothOp: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone,
+    BothOp: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone + Send + Sync,
     LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     RightOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
@@ -1136,7 +1222,7 @@ pub(crate) fn transform_with_transformed_snode<H: Hashword, F: Flagword<H>, K: K
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
-    BothOp: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone,
+    BothOp: Fn(&K, &V, &K, &V) -> MapJointTransformResult<V, ReduceT> + Clone + Send + Sync,
     LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     RightOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
