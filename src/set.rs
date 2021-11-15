@@ -109,7 +109,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
     }
 
     /// Run a transform operation on each entry in the set. Returns the transformed set and a reduction of the secondary returns of the transform operations.
-    pub fn transform<ReduceT, ReduceOp, Op>
+    pub async fn transform<ReduceT, ReduceOp, Op>
         (&self, reduce_op: ReduceOp, op: SetTransform<ReduceT, Op>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
@@ -124,7 +124,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
             }),
             SetTransform::Unchanged(r) => MapTransform::Unchanged(r),
             SetTransform::Removed(r) => MapTransform::Removed(r),
-        }, par_strat);
+        }, par_strat).await;
         (Self{set}, reduced)
     }
 
@@ -151,7 +151,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
     }
 
     /// Run a transform operation on each entry or pair of entries in the sets. Returns the transformed set and a reduction of the secondary returns of the transmute operations. Can reuse nodes from either set.
-    pub fn transform_with_transformed<ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub async fn transform_with_transformed<ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &Self, reduce_op: ReduceOp, both_op: SetJointTransform<ReduceT, BothOp>, left_op: SetTransform<ReduceT, LeftOp>, right_op: SetTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
@@ -178,12 +178,12 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
                 SetTransform::Generic(f) => MapTransform::Generic(move |r: &_, _: &_| f(r).into()),
                 SetTransform::Unchanged(r) => MapTransform::Unchanged(r),
                 SetTransform::Removed(r) => MapTransform::Removed(r),
-            }, par_strat);
+            }, par_strat).await;
         (HashTrieSet{set}, reduced)
     }
 
     /// Run a transform/transmute operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed set.
-    pub unsafe fn transform_with_transmuted<L: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub async unsafe fn transform_with_transmuted<L: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: SetTransform<ReduceT, BothOp>, left_op: SetTransform<ReduceT, LeftOp>, right_op: SetTransmute<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
@@ -211,12 +211,12 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
                     SetTransmuteResult::Removed(r) => MapTransmuteResult::Removed(r),
                 }),
                 SetTransmute::Removed(r) => MapTransmute::Removed(r),
-            }, par_strat);
+            }, par_strat).await;
         (HashTrieSet{set}, reduced)
     }
 
     /// Run a transmute/transform operation on each entry or pair of entries in the sets. Returns the transmuted set and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed set.
-    pub unsafe fn transmute_with_transformed<L: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub async unsafe fn transmute_with_transformed<L: Key + HashLike<K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieSet<H, F, L, M>, reduce_op: ReduceOp, both_op: SetTransform<ReduceT, BothOp>, left_op: SetTransmute<ReduceT, LeftOp>, right_op: SetTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (HashTrieSet<H, F, L, M>, ReduceT)
         where
         Self: Sized,
@@ -244,7 +244,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> HashTrieSet<H, F, 
                 SetTransform::Generic(f) => MapTransform::Generic(move |r: &_, _: &_| f(r).into()),
                 SetTransform::Unchanged(r) => MapTransform::Unchanged(r),
                 SetTransform::Removed(r) => MapTransform::Removed(r),
-            }, par_strat);
+            }, par_strat).await;
         (HashTrieSet{set}, reduced)
     }
 
@@ -310,6 +310,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> PartialEq for Hash
 #[cfg(test)]
 mod tests {
     use crate::{*, results::*, transformations::*};
+    use futures::executor::block_on;
     use rand::Rng;
     
     #[test]
@@ -320,8 +321,8 @@ mod tests {
             set = set.insert(i, false).unwrap().0;
         }
 
-        let removed = set.transform(|_,_| (), new_set_transform_removed(()), ParallelismStrategy::default_par());
-        let summed = set.transform(|&l,&r| l + r, new_set_transform_generic(|&k| SetTransformResult::Removed(k)), ParallelismStrategy::default_par());
+        let removed = block_on(set.transform(|_,_| (), new_set_transform_removed(()), ParallelismStrategy::default_par()));
+        let summed = block_on(set.transform(|&l,&r| l + r, new_set_transform_generic(|&k| SetTransformResult::Removed(k)), ParallelismStrategy::default_par()));
 
         assert_eq!(removed.0.size(), 0);
         assert_eq!(summed.1, 5050);
@@ -357,29 +358,29 @@ mod tests {
             setb = setb.insert(i, true).unwrap().0;
         }
 
-        let ff = seta.transform_with_transformed(
+        let ff = block_on(seta.transform_with_transformed(
             &setb, 
             |l,r| -> i32 {l.wrapping_add(*r)},
             new_set_joint_transform_generic(|l: &i32, r: &i32| SetJointTransformResult::Removed(l.wrapping_mul(*r))),
             new_set_transform_generic(|l| SetTransformResult::Unchanged(*l)),
             new_set_transform_generic(|r| SetTransformResult::Unchanged(*r)),
-        ParallelismStrategy::default_par());
-        let fm = unsafe { seta.transform_with_transmuted(
+        ParallelismStrategy::default_par()));
+        let fm = block_on(unsafe { seta.transform_with_transmuted(
             &setb, 
             |l,r| -> i32 {l.wrapping_add(*r)},
             new_set_transform_transmute_generic(|l: &i32, r| SetTransformResult::Removed(l.wrapping_mul(*r))),
             new_set_transform_generic(|l| SetTransformResult::Unchanged(*l)),
             new_set_transmute_generic(|r| SetTransmuteResult::Transmuted(*r, *r)),
         ParallelismStrategy::default_par())
-        };
-        let mf = unsafe { seta.transmute_with_transformed(
+        });
+        let mf = block_on(unsafe { seta.transmute_with_transformed(
             &setb, 
             |l,r| -> i32 {l.wrapping_add(*r)},
             new_set_transform_transmute_generic(|l: &i32, r| SetTransformResult::Removed(l.wrapping_mul(*r))),
             new_set_transmute_generic(|l| SetTransmuteResult::Transmuted(*l, *l)),
             new_set_transform_generic(|r| SetTransformResult::Unchanged(*r)),
         ParallelismStrategy::default_par())
-        };
+        });
         let mm = unsafe { seta.transmute_with_transmuted(
             &setb, 
             |l,r| -> i32 {l.wrapping_add(*r)},
@@ -392,10 +393,10 @@ mod tests {
         assert_eq!(ff.1, mf.1);
         assert_eq!(ff.1, mm.1);
 
-        let ffx = ff.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)), ParallelismStrategy::default_par());
-        let fmx = fm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)), ParallelismStrategy::default_par());
-        let mfx = mf.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)), ParallelismStrategy::default_par());
-        let mmx = mm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)), ParallelismStrategy::default_par());
+        let ffx = block_on(ff.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)), ParallelismStrategy::default_par()));
+        let fmx = block_on(fm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)), ParallelismStrategy::default_par()));
+        let mfx = block_on(mf.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)), ParallelismStrategy::default_par()));
+        let mmx = block_on(mm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_set_transform_generic(|k| SetTransformResult::Removed(*k)), ParallelismStrategy::default_par()));
 
         assert_eq!(ffx.1, fmx.1);
         assert_eq!(ffx.1, mfx.1);

@@ -112,7 +112,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     /// Run a transform operation on each entry in the map. Returns the transformed map and a reduction of the secondary returns of the transform operations.
-    pub fn transform<ReduceT, ReduceOp, Op>
+    pub async fn transform<ReduceT, ReduceOp, Op>
         (&self, reduce_op: ReduceOp, op: MapTransform<ReduceT, Op>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
@@ -120,7 +120,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         Op: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync
     {
-        let (set, reduced) = self.set.transform(reduce_op, op, par_strat);
+        let (set, reduced) = self.set.transform(reduce_op, op, par_strat).await;
         (Self{set}, reduced)
     }
 
@@ -141,7 +141,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
     }
 
     /// Run a transform operation on each entry or pair of entries in the maps. Returns the transformed map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from either map.
-    pub fn transform_with_transformed<ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub async fn transform_with_transformed<ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &Self, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
@@ -151,12 +151,12 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
         RightOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     {
-        let (set, reduced) = self.set.transform_with_transformed(&right.set, reduce_op, both_op, left_op, right_op, par_strat);
+        let (set, reduced) = self.set.transform_with_transformed(&right.set, reduce_op, both_op, left_op, right_op, par_strat).await;
         (HashTrieMap{set}, reduced)
     }
 
     /// Run a transform/transmute operation on each entry or pair of entries in the maps. Returns the transmuted map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed map. Like transform_with_transmuted but enforces identity transformations on keys.
-    pub fn transform_with_transfuted<W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub async fn transform_with_transfuted<W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieMap<H, F, K, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: SetTransmute<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
@@ -173,13 +173,13 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
                     SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
                 }),
                 SetTransmute::Removed(r) => MapTransmute::Removed(r),
-            }, par_strat)
+            }, par_strat).await
         };
         (HashTrieMap{set}, reduced)
     }
 
     /// Run a transform/transmute operation on each entry or pair of entries in the maps. Returns the transmuted map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed map.
-    pub unsafe fn transform_with_transmuted<L: Key + HashLike<K>, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub async unsafe fn transform_with_transmuted<L: Key + HashLike<K>, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieMap<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
@@ -194,12 +194,12 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         L: PartialEq<K>,
         M: HasherBv<H, L>,
     {
-        let (set, reduced) = self.set.transform_with_transmuted(&right.set, reduce_op, both_op, left_op, right_op, par_strat);
+        let (set, reduced) = self.set.transform_with_transmuted(&right.set, reduce_op, both_op, left_op, right_op, par_strat).await;
         (HashTrieMap{set}, reduced)
     }
 
     /// Run a transmute/transform operation on each entry or pair of entries in the maps. Returns the transmuted map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed map. Like transmute_with_transformed but enforces identity transformations on keys.
-    pub fn transfute_with_transformed<W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub async fn transfute_with_transformed<W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieMap<H, F, K, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: SetTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (HashTrieMap<H, F, K, W, M>, ReduceT)
         where
         Self: Sized,
@@ -216,13 +216,13 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
                     SetTransmuteResult::Removed(reduced) => MapTransmuteResult::Removed(reduced),
                 }),
                 SetTransmute::Removed(r) => MapTransmute::Removed(r),
-            }, right_op, par_strat)
+            }, right_op, par_strat).await
         };
         (HashTrieMap{set}, reduced)
     }
 
     /// Run a transmute/transform operation on each entry or pair of entries in the maps. Returns the transmuted map and a reduction of the secondary returns of the transmute operations. Can reuse nodes from the transformed map.
-    pub unsafe fn transmute_with_transformed<L: Key + HashLike<K>, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub async unsafe fn transmute_with_transformed<L: Key + HashLike<K>, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrieMap<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (HashTrieMap<H, F, L, W, M>, ReduceT)
         where
         Self: Sized,
@@ -237,7 +237,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         L: PartialEq<K>,
         M: HasherBv<H, L>,
     {
-        let (set, reduced) = self.set.transmute_with_transformed(&right.set, reduce_op, both_op, left_op, right_op, par_strat);
+        let (set, reduced) = self.set.transmute_with_transformed(&right.set, reduce_op, both_op, left_op, right_op, par_strat).await;
         (HashTrieMap{set}, reduced)
     }
 
@@ -285,6 +285,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> PartialE
 #[cfg(test)]
 mod tests {
     use crate::{*, results::*, transformations::{new_map_joint_transform_generic, new_map_transform_generic, new_map_transform_removed, new_map_transform_transmute_generic, new_map_transmute_generic, new_map_transmute_removed, new_map_transmute_transform_generic, new_map_transmute_transmute_generic}};
+    use futures::executor::block_on;
     use rand::Rng;
     
     #[test]
@@ -297,8 +298,8 @@ mod tests {
             squared = squared.insert(i, i * i, false).unwrap().0;
         }
 
-        let removed = map.transform(|_,_| (), new_map_transform_removed(()), ParallelismStrategy::default_par());
-        let tsquared = map.transform(|_,_| (), new_map_transform_generic(|_,v| MapTransformResult::Transformed(v * v, ())), ParallelismStrategy::default_par());
+        let removed = block_on(map.transform(|_,_| (), new_map_transform_removed(()), ParallelismStrategy::default_par()));
+        let tsquared = block_on(map.transform(|_,_| (), new_map_transform_generic(|_,v| MapTransformResult::Transformed(v * v, ())), ParallelismStrategy::default_par()));
 
         assert_eq!(removed.0.size(), 0);
 
@@ -346,12 +347,11 @@ mod tests {
             mapb = mapb.insert(i, i, true).unwrap().0;
         }
 
-        let ff = mapa.transform_with_transformed(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
-        new_map_joint_transform_generic(|_,v:&i32,_,w| MapJointTransformResult::Removed(v.wrapping_mul(*w))), new_map_transform_generic(|_, v: &i32| MapTransformResult::Unchanged(*v)), new_map_transform_generic(|_,v| MapTransformResult::Unchanged(*v)), ParallelismStrategy::default_par());
-        let fm = unsafe { mapa.transform_with_transmuted(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
-            new_map_transform_transmute_generic(|_,v:&i32,_,w| MapTransformResult::Removed(v.wrapping_mul(*w))), new_map_transform_generic(|_,v| MapTransformResult::Unchanged(*v)), new_map_transmute_generic(|k,v| MapTransmuteResult::Transmuted(*k, *v, *v)), ParallelismStrategy::default_par()) };
-        let mf = unsafe { mapa.transmute_with_transformed(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
-            new_map_transmute_transform_generic(|_,v:&i32,_,w| MapTransformResult::Removed(v.wrapping_mul(*w))), new_map_transmute_generic(|k,v| MapTransmuteResult::Transmuted(*k, *v, *v)), new_map_transform_generic(|_,v| MapTransformResult::Unchanged(*v)), ParallelismStrategy::default_par()) };
+        let ff = block_on(mapa.transform_with_transformed(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},        new_map_joint_transform_generic(|_,v:&i32,_,w| MapJointTransformResult::Removed(v.wrapping_mul(*w))), new_map_transform_generic(|_, v: &i32| MapTransformResult::Unchanged(*v)), new_map_transform_generic(|_,v| MapTransformResult::Unchanged(*v)), ParallelismStrategy::default_par()));
+        let fm = block_on(unsafe { mapa.transform_with_transmuted(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
+            new_map_transform_transmute_generic(|_,v:&i32,_,w| MapTransformResult::Removed(v.wrapping_mul(*w))), new_map_transform_generic(|_,v| MapTransformResult::Unchanged(*v)), new_map_transmute_generic(|k,v| MapTransmuteResult::Transmuted(*k, *v, *v)), ParallelismStrategy::default_par()) });
+        let mf = block_on(unsafe { mapa.transmute_with_transformed(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
+            new_map_transmute_transform_generic(|_,v:&i32,_,w| MapTransformResult::Removed(v.wrapping_mul(*w))), new_map_transmute_generic(|k,v| MapTransmuteResult::Transmuted(*k, *v, *v)), new_map_transform_generic(|_,v| MapTransformResult::Unchanged(*v)), ParallelismStrategy::default_par()) });
         let mm = unsafe { mapa.transmute_with_transmuted(&mapb, |l,r| -> i32 {l.wrapping_add(*r)},
             new_map_transmute_transmute_generic(|_,v:&i32,_,w| MapTransmuteResult::Removed(v.wrapping_mul(*w))), new_map_transmute_generic(|k,v| MapTransmuteResult::Transmuted(*k, *v, *v)), new_map_transmute_generic(|k,v| MapTransmuteResult::Transmuted(*k, *v, *v))) };
 
@@ -359,10 +359,10 @@ mod tests {
         assert_eq!(ff.1, mf.1);
         assert_eq!(ff.1, mm.1);
 
-        let ffx = ff.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)), ParallelismStrategy::default_par());
-        let fmx = fm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)), ParallelismStrategy::default_par());
-        let mfx = mf.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)), ParallelismStrategy::default_par());
-        let mmx = mm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)), ParallelismStrategy::default_par());
+        let ffx = block_on(ff.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)), ParallelismStrategy::default_par()));
+        let fmx = block_on(fm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)), ParallelismStrategy::default_par()));
+        let mfx = block_on(mf.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)), ParallelismStrategy::default_par()));
+        let mmx = block_on(mm.0.transform(|l,r| -> i32 {l.wrapping_add(*r)}, new_map_transform_generic(|_,v| MapTransformResult::Removed(*v)), ParallelismStrategy::default_par()));
 
         assert_eq!(ffx.1, fmx.1);
         assert_eq!(ffx.1, mfx.1);

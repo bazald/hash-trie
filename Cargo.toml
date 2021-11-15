@@ -10,13 +10,14 @@ license = "MPL-2.0"
 keywords = ["hashmap", "nostd", "concurrency", "immutable", "generic"]
 
 [dependencies]
-fnv = "1.0.7"
-rayon = { version = "1.5.1", optional = true }
+async-recursion = "^0.3.2"
+fnv = "^1.0.7"
+futures = "^0.3.16"
 
 [dev-dependencies]
-im = "15.0.0"
-rand = "0.8.3"
+im = "^15.0.0"
+rand = "^0.8.3"
+tokio = { version = "^1.13.0", features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = []
-parallel = ["rayon"]

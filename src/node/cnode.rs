@@ -1,10 +1,9 @@
 use crate::{bit_indexed_array::*, flag::*, transformations::*, results::*, traits::*, ParallelismStrategy};
 use super::{lnode::{self, *}, mnode::*, snode::{self, *}};
 use alloc::{boxed::Box, borrow::Cow, fmt::Debug, sync::Arc, vec::Vec};
+use async_recursion::async_recursion;
+use futures::join;
 use core::{ops::Range, ptr};
-
-#[cfg(feature = "parallel")]
-use rayon;
 
 #[derive(Debug)]
 pub(crate) struct CNode <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> {
@@ -116,7 +115,8 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> CNode<H,
     }
 }
 
-pub(super) fn transform<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, Op>(this: &CNode<H, F, K, V, M>, reduce_op: ReduceOp, op: MapTransform<ReduceT, Op>, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
+#[async_recursion(?Send)]
+pub(super) async fn transform<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, Op>(this: &CNode<H, F, K, V, M>, reduce_op: ReduceOp, op: MapTransform<ReduceT, Op>, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
@@ -130,22 +130,24 @@ where
     }
 
     let (size, bits, mut values, unchanged, reduced) = {
-        #[cfg(feature = "parallel")]
         match par_strat {
             ParallelismStrategy::MiddleIndex => {
                 let op_clone = op.clone();
-                let ((lsize, lbits, mut lvalues, luc, rl), (rsize, rbits, mut rvalues, ruc, rr)) = rayon::join(
-                    || transform_impl(this, reduce_op.clone(), op, 0..F::max_ones()/2, par_strat),
-                    || transform_impl(this, reduce_op.clone(), op_clone, F::max_ones()/2..F::max_ones(), par_strat));
+
+                let left = transform_impl(this, reduce_op.clone(), op, 0..F::max_ones()/2, par_strat);
+                let right = transform_impl(this, reduce_op.clone(), op_clone, F::max_ones()/2..F::max_ones(), par_strat);
+
+                let (left, right) = join!(left, right);
+
+                let (lsize, lbits, mut lvalues, luc, rl) = left;
+                let (rsize, rbits, mut rvalues, ruc, rr) = right;
+
                 lvalues.append(&mut rvalues);
         
                 (lsize + rsize, lbits.bit_merge(rbits).unwrap(), lvalues, luc && ruc, reduce_op(&rl, &rr))
             },
-            ParallelismStrategy::Sequential => transform_impl(this, reduce_op, op, 0..F::max_ones(), par_strat)
+            ParallelismStrategy::Sequential => transform_impl(this, reduce_op, op, 0..F::max_ones(), par_strat).await
         }
-
-        #[cfg(not(feature = "parallel"))]
-        transform_impl(this, reduce_op, op, 0..F::max_ones(), par_strat)
     };
 
     if unchanged {
@@ -165,7 +167,7 @@ where
 }
 
 
-fn transform_impl<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, Op>(this: &CNode<H, F, K, V, M>, reduce_op: ReduceOp, op: MapTransform<ReduceT, Op>, range: Range<usize>, par_strat: ParallelismStrategy) -> (usize, F, Vec<MNode<H, F, K, V, M>>, bool, ReduceT)
+async fn transform_impl<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, Op>(this: &CNode<H, F, K, V, M>, reduce_op: ReduceOp, op: MapTransform<ReduceT, Op>, range: Range<usize>, par_strat: ParallelismStrategy) -> (usize, F, Vec<MNode<H, F, K, V, M>>, bool, ReduceT)
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
@@ -180,7 +182,7 @@ where
 
     for index in range {
         if let Ok(node) = this.nodes.at_bit_index(index) {
-            match node.transform(reduce_op.clone(), op.clone(), par_strat) {
+            match node.transform(reduce_op.clone(), op.clone(), par_strat).await {
                 MNodeTransformResult::Unchanged(r) => {
                     size += node.size();
                     bits_t = bits_t.bit_insert(<F>::nth_bit(index).unwrap()).unwrap();
@@ -279,7 +281,8 @@ where
     }
 }
 
-pub(crate) fn transform_with_transformed<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &MNode<H, F, K, V, M>, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeJointTransformResult<H, F, K, V, M, ReduceT>
+#[async_recursion(?Send)]
+pub(crate) async fn transform_with_transformed<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &MNode<H, F, K, V, M>, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeJointTransformResult<H, F, K, V, M, ReduceT>
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
@@ -289,13 +292,14 @@ where
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
 {
     match right {
-        MNode::C(cnode) => transform_with_transformed_cnode(this, cnode, reduce_op, both_op, left_op, right_op, depth, par_strat),
-        MNode::L(lnode) => transform_with_transformed_lnode(this, lnode, reduce_op, both_op, left_op, right_op, depth, par_strat),
-        MNode::S(snode) => transform_with_transformed_snode(this, snode, reduce_op, both_op, left_op, right_op, depth, par_strat),
+        MNode::C(cnode) => transform_with_transformed_cnode(this, cnode, reduce_op, both_op, left_op, right_op, depth, par_strat).await,
+        MNode::L(lnode) => transform_with_transformed_lnode(this, lnode, reduce_op, both_op, left_op, right_op, depth, par_strat).await,
+        MNode::S(snode) => transform_with_transformed_snode(this, snode, reduce_op, both_op, left_op, right_op, depth, par_strat).await,
     }
 }
 
-pub(crate) unsafe fn transform_with_transmuted<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &MNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
+#[async_recursion(?Send)]
+pub(crate) async unsafe fn transform_with_transmuted<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &MNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
@@ -310,13 +314,14 @@ where
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
 {
     match right {
-        MNode::C(cnode) => transform_with_transmuted_cnode(this, cnode, reduce_op, both_op, left_op, right_op, depth, par_strat),
-        MNode::L(lnode) => transform_with_transmuted_lnode(this, lnode, reduce_op, both_op, left_op, right_op, depth, par_strat),
-        MNode::S(snode) => transform_with_transmuted_snode(this, snode, reduce_op, both_op, left_op, right_op, depth, par_strat),
+        MNode::C(cnode) => transform_with_transmuted_cnode(this, cnode, reduce_op, both_op, left_op, right_op, depth, par_strat).await,
+        MNode::L(lnode) => transform_with_transmuted_lnode(this, lnode, reduce_op, both_op, left_op, right_op, depth, par_strat).await,
+        MNode::S(snode) => transform_with_transmuted_snode(this, snode, reduce_op, both_op, left_op, right_op, depth, par_strat).await,
     }
 }
 
-pub(crate) unsafe fn transmute_with_transformed<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &MNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, L, W, M, ReduceT>
+#[async_recursion(?Send)]
+pub(crate) async unsafe fn transmute_with_transformed<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &MNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, L, W, M, ReduceT>
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
@@ -331,7 +336,7 @@ where
     <F as core::convert::TryFrom<<H as core::ops::BitAnd>::Output>>::Error: core::fmt::Debug
 {
     match right {
-        MNode::C(cnode) => transmute_with_transformed_cnode(this, cnode, reduce_op, both_op, left_op, right_op, depth, par_strat),
+        MNode::C(cnode) => transmute_with_transformed_cnode(this, cnode, reduce_op, both_op, left_op, right_op, depth, par_strat).await,
         MNode::L(lnode) => transmute_with_transformed_lnode(this, lnode, reduce_op, both_op, left_op, right_op, depth),
         MNode::S(snode) => transmute_with_transformed_snode(this, snode, reduce_op, both_op, left_op, right_op, depth, par_strat),
     }
@@ -363,7 +368,7 @@ where
     }
 }
 
-pub(crate) fn transform_with_transformed_cnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &CNode<H, F, K, V, M>, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeJointTransformResult<H, F, K, V, M, ReduceT>
+pub(crate) async fn transform_with_transformed_cnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &CNode<H, F, K, V, M>, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeJointTransformResult<H, F, K, V, M, ReduceT>
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
@@ -425,24 +430,26 @@ where
     }
 
     let (size, bits, mut values, unchangedl, unchangedr, reduced) = {
-        #[cfg(feature = "parallel")]
         match par_strat {
             ParallelismStrategy::MiddleIndex => {
                 let both_op_clone = both_op.clone();
                 let left_op_clone = left_op.clone();
                 let right_op_clone = right_op.clone();
-                let ((lsize, lbits, mut lvalues, lucl, lucr, rl), (rsize, rbits, mut rvalues, rucl, rucr, rr)) = rayon::join(
-                    || transform_with_transformed_cnode_impl(this, right, reduce_op.clone(), both_op, left_op, right_op, depth, 0..F::max_ones()/2, par_strat),
-                    || transform_with_transformed_cnode_impl(this, right, reduce_op.clone(), both_op_clone, left_op_clone, right_op_clone, depth, F::max_ones()/2..F::max_ones(), par_strat));
+
+                let left = transform_with_transformed_cnode_impl(this, right, reduce_op.clone(), both_op, left_op, right_op, depth, 0..F::max_ones()/2, par_strat);
+                let right = transform_with_transformed_cnode_impl(this, right, reduce_op.clone(), both_op_clone, left_op_clone, right_op_clone, depth, F::max_ones()/2..F::max_ones(), par_strat);
+
+                let (left, right) = join!(left, right);
+
+                let (lsize, lbits, mut lvalues, lucl, lucr, rl) = left;
+                let (rsize, rbits, mut rvalues, rucl, rucr, rr) = right;
+
                 lvalues.append(&mut rvalues);
         
                 (lsize + rsize, lbits.bit_merge(rbits).unwrap(), lvalues, lucl && rucl, lucr && rucr, reduce_op(&rl, &rr))
             },
-            ParallelismStrategy::Sequential => transform_with_transformed_cnode_impl(this, right, reduce_op, both_op, left_op, right_op, depth, 0..F::max_ones(), par_strat)
+            ParallelismStrategy::Sequential => transform_with_transformed_cnode_impl(this, right, reduce_op, both_op, left_op, right_op, depth, 0..F::max_ones(), par_strat).await
         }
-
-        #[cfg(not(feature = "parallel"))]
-        transform_with_transformed_cnode_impl(this, right, reduce_op, both_op, left_op, right_op, depth, 0..F::max_ones(), par_strat)
     };
 
     if unchangedl {
@@ -469,7 +476,7 @@ where
     }
 }
 
-pub(crate) fn transform_with_transformed_cnode_impl<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &CNode<H, F, K, V, M>, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, range: Range<usize>, par_strat: ParallelismStrategy) -> (usize, F, Vec<MNode<H, F, K, V, M>>, bool, bool, ReduceT)
+pub(crate) async fn transform_with_transformed_cnode_impl<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &CNode<H, F, K, V, M>, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, range: Range<usize>, par_strat: ParallelismStrategy) -> (usize, F, Vec<MNode<H, F, K, V, M>>, bool, bool, ReduceT)
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
@@ -493,10 +500,10 @@ where
             left = Some(node);
             if let Ok(right) = right.nodes.at_bit_index(index) {
                 right_node = Some(right);
-                node.transform_with_transformed(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat)
+                node.transform_with_transformed(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat).await
             }
             else {
-                match node.transform(reduce_op.clone(), left_op.clone(), par_strat) {
+                match node.transform(reduce_op.clone(), left_op.clone(), par_strat).await {
                     MNodeTransformResult::Unchanged(reduced) => MNodeJointTransformResult::UnchangedL(reduced),
                     MNodeTransformResult::C(cnode, reduced) => MNodeJointTransformResult::C(cnode, reduced),
                     MNodeTransformResult::L(lnode, reduced) => MNodeJointTransformResult::L(lnode, reduced),
@@ -507,7 +514,7 @@ where
         }
         else if let Ok(right) = right.nodes.at_bit_index(index) {
             right_node = Some(right);
-            match right.transform(reduce_op.clone(), right_op.clone(), par_strat) {
+            match right.transform(reduce_op.clone(), right_op.clone(), par_strat).await {
                 MNodeTransformResult::Unchanged(reduced) => MNodeJointTransformResult::UnchangedR(reduced),
                 MNodeTransformResult::C(cnode, reduced) => MNodeJointTransformResult::C(cnode, reduced),
                 MNodeTransformResult::L(lnode, reduced) => MNodeJointTransformResult::L(lnode, reduced),
@@ -575,7 +582,7 @@ where
     (size, bits_t, values_t, unchangedl, unchangedr, reduced)
 }
 
-pub(crate) unsafe fn transform_with_transmuted_cnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &CNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
+pub(crate) async unsafe fn transform_with_transmuted_cnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &CNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
@@ -601,10 +608,10 @@ where
         let transform_result = if let Ok(node) = this.nodes.at_bit_index(index) {
             left = Some(node);
             if let Ok(right) = right.nodes.at_bit_index(index) {
-                node.transform_with_transmuted(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat)
+                node.transform_with_transmuted(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat).await
             }
             else {
-                node.transform(reduce_op.clone(), left_op.clone(), par_strat)
+                node.transform(reduce_op.clone(), left_op.clone(), par_strat).await
             }
         }
         else if let Ok(right) = right.nodes.at_bit_index(index) {
@@ -665,7 +672,7 @@ where
     }
 }
 
-pub(crate) unsafe fn transmute_with_transformed_cnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &CNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, L, W, M, ReduceT>
+pub(crate) async unsafe fn transmute_with_transformed_cnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &CNode<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, L, W, M, ReduceT>
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
@@ -691,7 +698,7 @@ where
         let transform_result = if let Ok(node) = this.nodes.at_bit_index(index) {
             if let Ok(right) = right.nodes.at_bit_index(index) {
                 right_node = Some(right);
-                node.transmute_with_transformed(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat)
+                node.transmute_with_transformed(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat).await
             }
             else {
                 node.transmute(reduce_op.clone(), left_op.clone()).into()
@@ -699,7 +706,7 @@ where
         }
         else if let Ok(right) = right.nodes.at_bit_index(index) {
             right_node = Some(right);
-            right.transform(reduce_op.clone(), right_op.clone(), par_strat)
+            right.transform(reduce_op.clone(), right_op.clone(), par_strat).await
         }
         else {
             continue;
@@ -832,7 +839,8 @@ where
     }
 }
 
-pub(crate) fn transform_with_transformed_lnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &Arc<LNode<K, V>>, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeJointTransformResult<H, F, K, V, M, ReduceT>
+#[async_recursion(?Send)]
+pub(crate) async fn transform_with_transformed_lnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &Arc<LNode<K, V>>, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeJointTransformResult<H, F, K, V, M, ReduceT>
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
@@ -856,10 +864,10 @@ where
         let transform_result = if let Ok(node) = this.nodes.at_bit_index(index) {
             left = Some(node);
             if flag == F::nth_bit(index).unwrap() {
-                node.transform_with_transformed_lnode(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat)
+                node.transform_with_transformed_lnode(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat).await
             }
             else {
-                match node.transform(reduce_op.clone(), left_op.clone(), par_strat) {
+                match node.transform(reduce_op.clone(), left_op.clone(), par_strat).await {
                     MNodeTransformResult::Unchanged(reduced) => MNodeJointTransformResult::UnchangedL(reduced),
                     MNodeTransformResult::C(cnode, reduced) => MNodeJointTransformResult::C(cnode, reduced),
                     MNodeTransformResult::L(lnode, reduced) => MNodeJointTransformResult::L(lnode, reduced),
@@ -957,7 +965,8 @@ where
     }
 }
 
-pub(crate) unsafe fn transform_with_transmuted_lnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &Arc<LNode<L, W>>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
+#[async_recursion(?Send)]
+pub(crate) async unsafe fn transform_with_transmuted_lnode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &Arc<LNode<L, W>>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
@@ -985,10 +994,10 @@ where
         let transform_result = if let Ok(node) = this.nodes.at_bit_index(index) {
             left = Some(node);
             if flag == F::nth_bit(index).unwrap() {
-                node.transform_with_transmuted_lnode(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat)
+                node.transform_with_transmuted_lnode(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat).await
             }
             else {
-                node.transform(reduce_op.clone(), left_op.clone(), par_strat)
+                node.transform(reduce_op.clone(), left_op.clone(), par_strat).await
             }
         }
         else if flag == F::nth_bit(index).unwrap() {
@@ -1218,7 +1227,8 @@ where
     }
 }
 
-pub(crate) fn transform_with_transformed_snode<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &Arc<SNode<K, V>>, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeJointTransformResult<H, F, K, V, M, ReduceT>
+#[async_recursion(?Send)]
+pub(crate) async fn transform_with_transformed_snode<H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &Arc<SNode<K, V>>, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeJointTransformResult<H, F, K, V, M, ReduceT>
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
@@ -1242,10 +1252,10 @@ where
         let transform_result = if let Ok(node) = this.nodes.at_bit_index(index) {
             left = Some(node);
             if flag == F::nth_bit(index).unwrap() {
-                node.transform_with_transformed_snode(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat)
+                node.transform_with_transformed_snode(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat).await
             }
             else {
-                match node.transform(reduce_op.clone(), left_op.clone(), par_strat) {
+                match node.transform(reduce_op.clone(), left_op.clone(), par_strat).await {
                     MNodeTransformResult::Unchanged(reduced) => MNodeJointTransformResult::UnchangedL(reduced),
                     MNodeTransformResult::C(cnode, reduced) => MNodeJointTransformResult::C(cnode, reduced),
                     MNodeTransformResult::L(lnode, reduced) => MNodeJointTransformResult::L(lnode, reduced),
@@ -1342,7 +1352,8 @@ where
     }
 }
 
-pub(crate) unsafe fn transform_with_transmuted_snode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &Arc<SNode<L, W>>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
+#[async_recursion(?Send)]
+pub(crate) async unsafe fn transform_with_transmuted_snode<H: Hashword, F: Flagword<H>, K: Key, V: Value, L: Key, W: Value, M: HasherBv<H, K>, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>(this: &CNode<H, F, K, V, M>, right: &Arc<SNode<L, W>>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, depth: usize, par_strat: ParallelismStrategy) -> MNodeTransformResult<H, F, K, V, M, ReduceT>
 where
     ReduceT: Clone + Default + Send + Sync,
     ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
@@ -1370,10 +1381,10 @@ where
         let transform_result = if let Ok(node) = this.nodes.at_bit_index(index) {
             left = Some(node);
             if flag == F::nth_bit(index).unwrap() {
-                node.transform_with_transmuted_snode(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat)
+                node.transform_with_transmuted_snode(right, reduce_op.clone(), both_op.clone(), left_op.clone(), right_op.clone(), depth + 1, par_strat).await
             }
             else {
-                node.transform(reduce_op.clone(), left_op.clone(), par_strat)
+                node.transform(reduce_op.clone(), left_op.clone(), par_strat).await
             }
         }
         else if flag == F::nth_bit(index).unwrap() {

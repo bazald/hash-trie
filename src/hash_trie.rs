@@ -62,7 +62,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         self.root.visit(op);
     }
 
-    pub(crate) fn transform<ReduceT, ReduceOp, Op>
+    pub(crate) async fn transform<ReduceT, ReduceOp, Op>
         (&self, reduce_op: ReduceOp, op: MapTransform<ReduceT, Op>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
@@ -70,7 +70,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         ReduceOp: Fn(&ReduceT, &ReduceT) -> ReduceT + Clone + Send + Sync,
         Op: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     {
-        match self.root.transform(reduce_op, op, par_strat) {
+        match self.root.transform(reduce_op, op, par_strat).await {
             MNodeTransformResult::Unchanged(reduced) => (self.clone(), reduced),
             MNodeTransformResult::C(cnode, reduced) => (Self::singleton(MNode::C(cnode)), reduced),
             MNodeTransformResult::L(lnode, reduced) => (Self::singleton(MNode::L(lnode)), reduced),
@@ -98,7 +98,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         }
     }
 
-    pub(crate) fn transform_with_transformed<ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub(crate) async fn transform_with_transformed<ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &Self, reduce_op: ReduceOp, both_op: MapJointTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
@@ -108,7 +108,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         LeftOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
         RightOp: Fn(&K, &V) -> MapTransformResult<V, ReduceT> + Clone + Send + Sync,
     {
-        match self.root.transform_with_transformed(&right.root, reduce_op, both_op, left_op, right_op, 0, par_strat) {
+        match self.root.transform_with_transformed(&right.root, reduce_op, both_op, left_op, right_op, 0, par_strat).await {
             MNodeJointTransformResult::UnchangedLR(reduced) | MNodeJointTransformResult::UnchangedL(reduced) => (self.clone(), reduced),
             MNodeJointTransformResult::UnchangedR(reduced) => (right.clone(), reduced),
             MNodeJointTransformResult::C(cnode, reduced) => (HashTrie::singleton(MNode::C(cnode)), reduced),
@@ -118,7 +118,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         }
     }
 
-    pub(crate) unsafe fn transform_with_transmuted<L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub(crate) async unsafe fn transform_with_transmuted<L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransform<ReduceT, LeftOp>, right_op: MapTransmute<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (Self, ReduceT)
         where
         Self: Sized,
@@ -133,7 +133,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         L: PartialEq<K>,
         M: HasherBv<H, L>,
     {
-        match self.root.transform_with_transmuted(&right.root, reduce_op, both_op, left_op, right_op, 0, par_strat) {
+        match self.root.transform_with_transmuted(&right.root, reduce_op, both_op, left_op, right_op, 0, par_strat).await {
             MNodeTransformResult::Unchanged(reduced) => (self.clone(), reduced),
             MNodeTransformResult::C(cnode, reduced) => (HashTrie::singleton(MNode::C(cnode)), reduced),
             MNodeTransformResult::L(lnode, reduced) => (HashTrie::singleton(MNode::L(lnode)), reduced),
@@ -142,7 +142,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         }
     }
 
-    pub(crate) unsafe fn transmute_with_transformed<L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
+    pub(crate) async unsafe fn transmute_with_transformed<L: Key, W: Value, ReduceT, ReduceOp, BothOp, LeftOp, RightOp>
         (&self, right: &HashTrie<H, F, L, W, M>, reduce_op: ReduceOp, both_op: MapTransform<ReduceT, BothOp>, left_op: MapTransmute<ReduceT, LeftOp>, right_op: MapTransform<ReduceT, RightOp>, par_strat: ParallelismStrategy) -> (HashTrie<H, F, L, W, M>, ReduceT)
         where
         Self: Sized,
@@ -157,7 +157,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> HashTrie
         L: PartialEq<K>,
         M: HasherBv<H, L>,
     {
-        match self.root.transmute_with_transformed(&right.root, reduce_op, both_op, left_op, right_op, 0, par_strat) {
+        match self.root.transmute_with_transformed(&right.root, reduce_op, both_op, left_op, right_op, 0, par_strat).await {
             MNodeTransformResult::Unchanged(reduced) => (right.clone(), reduced),
             MNodeTransformResult::C(cnode, reduced) => (HashTrie::singleton(MNode::C(cnode)), reduced),
             MNodeTransformResult::L(lnode, reduced) => (HashTrie::singleton(MNode::L(lnode)), reduced),

@@ -4,15 +4,16 @@ use im::HashSet as ImHashSet;
 use std::{collections::{hash_set::HashSet}, sync::{Arc, Mutex}, time::SystemTime, vec::Vec};
 use rand::Rng;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let (lefts, rights) = get_values();
     let mut xored = HashSet::new();
 
     println!("HashSet: {} µs", hash_set(&lefts, &rights, &mut xored));
     println!("ImHashSet: {} µs", im_hash_set(&lefts, &rights, &xored));
-    println!("HashTrieSet transform with transformed: {} µs", hash_trie_set_transform_with_transformed(&lefts, &rights, &xored));
-    println!("HashTrieSet transform with transmuted: {} µs", hash_trie_set_transform_with_transmuted(&lefts, &rights, &xored));
-    println!("HashTrieSet transmute with transformed: {} µs", hash_trie_set_transmute_with_transformed(&lefts, &rights, &xored));
+    println!("HashTrieSet transform with transformed: {} µs", hash_trie_set_transform_with_transformed(&lefts, &rights, &xored).await);
+    println!("HashTrieSet transform with transmuted: {} µs", hash_trie_set_transform_with_transmuted(&lefts, &rights, &xored).await);
+    println!("HashTrieSet transmute with transformed: {} µs", hash_trie_set_transmute_with_transformed(&lefts, &rights, &xored).await);
     println!("HashTrieSet transmute with transmuted: {} µs", hash_trie_set_transmute_with_transmuted(&lefts, &rights, &xored));
 }
 
@@ -65,7 +66,7 @@ fn im_hash_set(lefts: &[i32], rights: &[i32], xored: &HashSet<i32>) -> u128 {
     t1.duration_since(t0).unwrap().as_micros()
 }
 
-fn hash_trie_set_transform_with_transformed(lefts: &[i32], rights: &[i32], xored: &HashSet<i32>) -> u128 {
+async fn hash_trie_set_transform_with_transformed(lefts: &[i32], rights: &[i32], xored: &HashSet<i32>) -> u128 {
     let mut left = HashTrieSet::<u64, u32, i32, FnvHasher>::new();
     for v in lefts {
         if let Ok(ht) = left.insert(*v, false) {
@@ -87,7 +88,7 @@ fn hash_trie_set_transform_with_transformed(lefts: &[i32], rights: &[i32], xored
         new_set_joint_transform_removed(()),
         new_set_transform_unchanged(()),
         new_set_transform_unchanged(()),
-    ParallelismStrategy::default_par()).0;
+    ParallelismStrategy::default_par()).await.0;
 
     let t1 = SystemTime::now();
     
@@ -98,7 +99,7 @@ fn hash_trie_set_transform_with_transformed(lefts: &[i32], rights: &[i32], xored
     t1.duration_since(t0).unwrap().as_micros()
 }
 
-fn hash_trie_set_transform_with_transmuted(lefts: &[i32], rights: &[i32], xored: &HashSet<i32>) -> u128 {
+async fn hash_trie_set_transform_with_transmuted(lefts: &[i32], rights: &[i32], xored: &HashSet<i32>) -> u128 {
     let mut left = HashTrieSet::<u64, u32, i32, FnvHasher>::new();
     for v in lefts {
         if let Ok(ht) = left.insert(*v, false) {
@@ -120,7 +121,7 @@ fn hash_trie_set_transform_with_transmuted(lefts: &[i32], rights: &[i32], xored:
         new_set_transform_transmute_removed(()),
         new_set_transform_unchanged(()),
         new_set_transmute_generic(|r| SetTransmuteResult::Transmuted(*r, ())),
-    ParallelismStrategy::default_par()).0 };
+    ParallelismStrategy::default_par()).await.0 };
 
     let t1 = SystemTime::now();
     
@@ -131,7 +132,7 @@ fn hash_trie_set_transform_with_transmuted(lefts: &[i32], rights: &[i32], xored:
     t1.duration_since(t0).unwrap().as_micros()
 }
 
-fn hash_trie_set_transmute_with_transformed(lefts: &[i32], rights: &[i32], xored: &HashSet<i32>) -> u128 {
+async fn hash_trie_set_transmute_with_transformed(lefts: &[i32], rights: &[i32], xored: &HashSet<i32>) -> u128 {
     let mut left = HashTrieSet::<u64, u32, i32, FnvHasher>::new();
     for v in lefts {
         if let Ok(ht) = left.insert(*v, false) {
@@ -153,7 +154,7 @@ fn hash_trie_set_transmute_with_transformed(lefts: &[i32], rights: &[i32], xored
         new_set_transform_transmute_removed(()),
         new_set_transmute_generic(|l| SetTransmuteResult::Transmuted(*l, ())),
         new_set_transform_unchanged(()),
-        ParallelismStrategy::default_par()).0 };
+        ParallelismStrategy::default_par()).await.0 };
 
     let t1 = SystemTime::now();
     
