@@ -11,10 +11,12 @@ keywords = ["hashmap", "nostd", "concurrency", "immutable", "generic"]
 
 [dependencies]
 async-recursion = "^0.3.2"
-fnv = "^1.0.7"
-futures = "^0.3.16"
+fnv = { version = "^1.0.7", default-features = false }
+futures-core = { version = "^0.3.17", default-features = false, features = ["alloc"] }
+futures-util = { version = "^0.3.17", default-features = false, features = ["alloc", "async-await", "async-await-macro"] }
 
 [dev-dependencies]
+futures-executor = "^0.3.17"
 im = "^15.0.0"
 rand = "^0.8.3"
 tokio = { version = "^1.13.0", features = ["macros", "rt-multi-thread"] }

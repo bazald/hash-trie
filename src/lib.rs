@@ -4,8 +4,6 @@
 #[macro_use]
 extern crate alloc;
 
-extern crate futures;
-
 #[macro_use]
 pub mod results;
 mod bit_indexed_array;

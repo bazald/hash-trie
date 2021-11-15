@@ -2,8 +2,8 @@ use crate::{bit_indexed_array::*, flag::*, transformations::*, results::*, trait
 use super::{lnode::{self, *}, mnode::*, snode::{self, *}};
 use alloc::{boxed::Box, borrow::Cow, fmt::Debug, sync::Arc, vec::Vec};
 use async_recursion::async_recursion;
-use futures::join;
 use core::{ops::Range, ptr};
+use futures_util::join;
 
 #[derive(Debug)]
 pub(crate) struct CNode <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: 'static> {

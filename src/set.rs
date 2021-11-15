@@ -310,7 +310,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, M: HasherBv<H, K>> PartialEq for Hash
 #[cfg(test)]
 mod tests {
     use crate::{*, results::*, transformations::*};
-    use futures::executor::block_on;
+    use futures_executor::block_on;
     use rand::Rng;
     
     #[test]

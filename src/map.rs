@@ -285,7 +285,7 @@ impl <H: Hashword, F: Flagword<H>, K: Key, V: Value, M: HasherBv<H, K>> PartialE
 #[cfg(test)]
 mod tests {
     use crate::{*, results::*, transformations::{new_map_joint_transform_generic, new_map_transform_generic, new_map_transform_removed, new_map_transform_transmute_generic, new_map_transmute_generic, new_map_transmute_removed, new_map_transmute_transform_generic, new_map_transmute_transmute_generic}};
-    use futures::executor::block_on;
+    use futures_executor::block_on;
     use rand::Rng;
     
     #[test]
