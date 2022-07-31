@@ -14,13 +14,13 @@ impl<B: CountOnes, V: Clone, E: Clone, const SIZE: usize> BitIndexedArrayImpl<B,
             return Err(());
         }
         let values = unsafe {
-            #[allow(deprecated)]
-            let mut building: [V; SIZE] = mem::uninitialized();
+            let mut building = mem::MaybeUninit::<[V; SIZE]>::uninit();
             #[allow(clippy::needless_range_loop)]
             for i in 0..SIZE {
-                ptr::write(&mut building[i], values.at_index(i))
+                building.as_mut_ptr().cast::<V>().add(i).write(values.at_index(i));
             }
-            building
+            // SAFETY: Values from 0 to SIZE have been written above
+            building.assume_init()
         };
         Ok(Self { bits, values, extra })
     }
